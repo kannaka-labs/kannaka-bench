@@ -123,8 +123,11 @@ Reading it:
   slower per item, 27× the bytes per item.
 - **The ξ-diversity reranker is a non-factor here:** with `KANNAKA_RECALL_XI_BOOST=off` (kannaka-memory
   #975) the six probe questions came out hit-for-hit identical (5/6 either way), and the one traced
-  inversion it caused (gold 5th → 8th) was a miss under both. Facet decomposition on/off with these
-  embeddings is running; appended when done.
+  inversion it caused (gold 5th → 8th) was a miss under both.
+- **Facet decomposition is a non-factor too:** `KANNAKA_FACET_DECOMPOSE=0`, with and without the ξ
+  reranker, came out hit-for-hit identical to the default on the six probe questions (5/6 each;
+  `probe-facet`). The remaining one-in-thirty gap to cosine is the single-session-user question the
+  trace dissected, not a knob.
 
 The earlier partial (0.778 at n=9) was an early-sample artefact; the full 30 is the number.
 
