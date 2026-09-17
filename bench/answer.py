@@ -89,7 +89,12 @@ def chat(url: str, key: str, model: str, system: str, user: str, max_tokens: int
     raise last or LlmError("no response")
 
 
-def load_questions(dataset: str, limit):
+def load_questions(dataset: str, limit, manifest=None):
+    if dataset.startswith("convomem"):
+        from .datasets import convomem
+        ctx = int((manifest or {}).get("dataset", {}).get("context_size") or 50)
+        qs, _ = convomem.load(context=ctx, limit=limit)
+        return {q.id: (q, {it.id: it for it in q.items}, q.items) for q in qs}
     if dataset == "locomo":
         from .datasets import locomo
         convs, _ = locomo.load(limit_questions=limit)
@@ -192,7 +197,7 @@ def main(argv=None):
         keep = set(a.adapters.split(","))
         rows = [r for r in rows if r["adapter"] in keep]
     full = set(x for x in a.full_context.split(",") if x)
-    qmap = load_questions("locomo" if dataset.startswith("locomo") else dataset, limit)
+    qmap = load_questions("locomo" if dataset.startswith("locomo") else dataset, limit, manifest)
 
     out_path = os.path.join(a.run, f"answers-{a.tag}.jsonl" if a.tag else "answers.jsonl")
     done = {}

@@ -106,7 +106,9 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", default="longmemeval_oracle",
-                    choices=["longmemeval_oracle", "longmemeval_s", "longmemeval_m", "locomo"])
+                    choices=["longmemeval_oracle", "longmemeval_s", "longmemeval_m", "locomo", "convomem"])
+    ap.add_argument("--convomem-context", type=int, default=50,
+                    help="convomem: haystack size in conversations (1..300 as pre-mixed on the hub)")
     ap.add_argument("--adapters", default="kannaka,vector_numpy,recency")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--session-cap", type=int, default=0,
@@ -123,7 +125,11 @@ def main(argv=None):
     os.makedirs(out_dir, exist_ok=True)
     work = tempfile.mkdtemp(prefix="kannaka-bench-")
 
-    if a.dataset == "locomo":
+    if a.dataset == "convomem":
+        from .datasets import convomem
+        qs, dsmeta = convomem.load(context=a.convomem_context, limit=a.limit)
+        stores = [(q.id.replace("/", "_"), q.items, [q], "session") for q in qs]
+    elif a.dataset == "locomo":
         from .datasets import locomo
         convs, dsmeta = locomo.load(limit_questions=a.limit)
         stores = [(cid, items, qs, "turn") for cid, items, qs in convs]
