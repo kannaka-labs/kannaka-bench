@@ -236,3 +236,14 @@ hit@15 stays 1.000 throughout; knowledge-update stays 1.0. One session per slot 
 shape for LongMemEval's session-level questions: the answer stage already expands each hit to
 its turn pair, so nothing is lost by taking one turn per session. kannaka_minilm at cap 1 and the
 answer pass for both are running; appended when done.
+
+**The cap-1 answer pass is a loss (cosine, k=15, cap 1, answer stage v2):** accuracy **0.500**,
+down from 0.733 without the cap; by type knowledge-update 0.80, multi-session 0.20,
+single-session-assistant **0.20 (was 1.00)**, preference 0.60, user 0.60, temporal 0.60; prompt
+~6.2k tokens. Retrieval found more sessions and threw away the turn that carried the answer: the
+answer-bearing turn is often *not* its session's top-ranked turn, and one-turn-per-session keeps
+only the top-ranked one. Multi-session did not gain either (0.20): the counts need the specific
+turns, not just the sessions. So session diversity and within-session coverage trade against each
+other at a fixed budget, and the cap alone is the wrong knob. Next: keep the candidate list per
+row and let the answer stage take the top-M turns of each selected session (`--per-session`),
+measured offline on the same retrieval rows.
