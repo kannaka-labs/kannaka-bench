@@ -117,6 +117,8 @@ def main(argv=None):
                     help="LongMemEval: questions PER question type (stratified); LoCoMo: questions per conversation")
     ap.add_argument("--out", default="results")
     ap.add_argument("--name", default=None)
+    ap.add_argument("--resume", action="store_true",
+                    help="keep the run dir's existing non-error rows and skip those (adapter, question) pairs")
     a = ap.parse_args(argv)
 
     names = [n for n in a.adapters.split(",") if n]
@@ -147,9 +149,21 @@ def main(argv=None):
         "adapter_versions": {},
     }
     rows: list[dict] = []
+    done: set = set()
+    prev = os.path.join(out_dir, "results.jsonl")
+    if a.resume and os.path.exists(prev):
+        for line in open(prev, encoding="utf-8"):
+            if line.strip():
+                r = json.loads(line)
+                if "error" not in r:
+                    rows.append(r)
+                    done.add((r["adapter"], r["question_id"]))
+        print(f"resume: keeping {len(rows)} rows, {len(done)} (adapter, question) pairs done", flush=True)
     t_start = time.perf_counter()
     for si, (sid, items, questions, level) in enumerate(stores):
         for n, ad in adapters.items():
+            if done and all((n, q.id) in done for q in questions):
+                continue
             run_dir = os.path.join(work, sid)
             try:
                 run_store(ad, run_dir, items, questions, a.k, level, rows, a.dataset, cap=a.session_cap)

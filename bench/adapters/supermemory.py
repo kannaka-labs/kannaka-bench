@@ -37,8 +37,10 @@ TERMINAL = {"done", "completed", "failed", "error", "indexed", "ready"}
 
 def _call(method: str, path: str, body=None, timeout: float = 120.0):
     data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(URL + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + KEY})
+    headers = {"Content-Type": "application/json"}
+    if KEY:
+        headers["Authorization"] = "Bearer " + KEY
+    req = urllib.request.Request(URL + path, data=data, method=method, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read()
     return json.loads(raw) if raw else {}
