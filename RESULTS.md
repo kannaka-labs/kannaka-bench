@@ -127,3 +127,60 @@ Reading it:
   embeddings is running; appended when done.
 
 The earlier partial (0.778 at n=9) was an early-sample artefact; the full 30 is the number.
+
+## 2026-09-17 — Phase 2: answer accuracy (`longmemeval_s`, same 30 questions, k=5)
+
+Answer model `agent-brain` (Claude Sonnet 4.5 via the KAX gateway) over the top-k of each finished
+retrieval run; LongMemEval-style judge (same model, CORRECT / INCORRECT against the gold). Token
+counts recorded per call. `bench/answer.py`; rows in `<run>/answers.jsonl` (v1) and
+`answers-v2.jsonl` (v2). Plain-context baseline (`recency --full-context`) = the whole history in
+the window, capped at 120k chars (~30k tokens; the first five uncapped rows were ~94k tokens each).
+
+**v1 answer stage** (1500-char excerpts, retrieved turns only, unordered, "say I don't know"):
+
+| adapter | n | accuracy | acc when hit | prompt tok/q | "I don't know" |
+|---|---|---|---|---|---|
+| vector_numpy (MiniLM cosine) | 30 | 0.47 | 0.48 | 1 035 | 8 |
+| kannaka_minilm | 30 | 0.47 | 0.50 | 1 037 | 10 |
+| plain context (120k cap) | 30 | 0.30 | — | 39 915 | 18 |
+| kannaka (shipped default, hash) | 30 | 0.23 | 0.31 | 781 | 22 |
+
+**The finding:** kannaka_minilm hit@5 was 0.93, yet accuracy-when-hit only 0.50 — and in 25 of the
+28 hits the exact `has_answer` turn was inside the window. The loss was the answer stage, not
+retrieval: 28% of turns exceed 1500 chars (p90 2 556; the model said "cut off"); assistant-type
+answers live in the reply *after* the retrieved user turn; knowledge-update rows were answered with
+the older value; preference rows were told to say "I don't know" against a gold that is a suggestion.
+
+**v2 answer stage** (`988bf27`: 6 000-char excerpts, each hit + its partner turn, chronological,
+"latest wins", a preference prompt; adapter-neutral):
+
+| adapter | n | accuracy | acc when hit | prompt tok/q | "I don't know" |
+|---|---|---|---|---|---|
+| vector_numpy (MiniLM cosine) | 30 | **0.63** | 0.66 | 2 112 | 4 |
+| kannaka_minilm | 30 | **0.63** | 0.64 | 2 105 | 5 |
+| kannaka (shipped default, hash) | 30 | 0.30 | 0.44 | 2 575 | 19 |
+| plain context (120k cap) | 30 | 0.27 | — | 28 879 | 17 |
+
+By type (v2, n=5 each): kannaka_minilm — knowledge-update 3, multi-session **1**, single-session-
+assistant 4, preference 5, single-session-user 4, temporal 2; vector_numpy — 3 / **0** / 4 / 5 / 5 / 2.
+
+Reading it:
+- With the same embeddings the medium and exact cosine tie on final accuracy (0.63 / 0.63). The
+  gap between "shipped default" and "with a real encoder" is the whole story: 0.30 vs 0.63.
+- **Multi-session is the open loss for every system** (0–1 of 5): counting across sessions needs
+  more than five excerpts. Next: k=10/15 retrieval runs (also the k at which Supermemory reports
+  its 95% Recall@15 — see below).
+- Plain context is *worse* than top-5 retrieval at this history length even before cost: 14× the
+  tokens for 0.27.
+- Cost: the whole phase 2 (120 rows, twice) was ≈ $6 at Sonnet rates; the retrieval rows are well
+  under a cent each — the capped baseline is 90% of the bill.
+
+### Competitor claims to test next: Supermemory (2026-09-17)
+
+`github.com/supermemoryai/supermemory` (MIT) claims "#1 on LongMemEval, LoCoMo and ConvoMem",
+**95% Recall@15** on LongMemEval (by type: knowledge-update 99, assistant 100, user 97,
+multi-session 93, temporal 91, preference 90), ~720 tokens/query, ~50 ms profiles. LLM fact
+extraction + contradiction resolution + expiry over retrieval; default embedding bge-base-en-v1.5;
+local binary, ollama offline. No accuracy, judge or answer model published. Not comparable to the
+tables above yet (k=15 vs k=5; recall vs accuracy). Planned: a `supermemory` adapter over the local
+binary, a ConvoMem loader, and k=15 for everyone — issue #1.
