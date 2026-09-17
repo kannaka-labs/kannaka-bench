@@ -12,6 +12,10 @@ table then says is about the medium and nothing else.
 
 POST /api/embed  {"model": "...", "input": "text" | ["t1", "t2"]}
   -> {"model": "...", "embeddings": [[...], ...]}
+POST /v1/embeddings  (OpenAI shape, for Supermemory's self-hosted server)
+  {"model": "...", "input": "text" | ["t1", "t2"]}
+  -> {"object": "list", "data": [{"object": "embedding", "index": i, "embedding": [...]}], "model": "...", "usage": {...}}
+GET  /v1/models   -> {"object": "list", "data": [{"id": "all-minilm"}]}
 GET  /api/version -> {"version": "kannaka-bench-embed"}
 """
 from __future__ import annotations
@@ -60,10 +64,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"version": "kannaka-bench-embed"})
         if self.path.startswith("/api/tags"):
             return self._json(200, {"models": [{"name": MODEL}]})
+        if self.path.startswith("/v1/models"):
+            return self._json(200, {"object": "list", "data": [{"id": "all-minilm", "object": "model", "owned_by": "kannaka-bench"},
+                                                               {"id": MODEL, "object": "model", "owned_by": "kannaka-bench"}]})
         self._json(404, {"error": "not found"})
 
     def do_POST(self):
-        if not self.path.startswith("/api/embed"):
+        openai_shape = self.path.startswith("/v1/embeddings")
+        if not (self.path.startswith("/api/embed") or openai_shape):
             return self._json(404, {"error": "not found"})
         n = int(self.headers.get("Content-Length") or 0)
         try:
@@ -77,6 +85,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": "empty input"})
         with _lock:
             vecs = model().encode(texts, normalize_embeddings=True, show_progress_bar=False)
+        if openai_shape:
+            n_tok = sum(len(t.split()) for t in texts)
+            return self._json(200, {"object": "list", "model": req.get("model", MODEL),
+                                    "data": [{"object": "embedding", "index": i, "embedding": v.tolist()} for i, v in enumerate(vecs)],
+                                    "usage": {"prompt_tokens": n_tok, "total_tokens": n_tok}})
         self._json(200, {"model": req.get("model", MODEL), "embeddings": [v.tolist() for v in vecs]})
 
 
