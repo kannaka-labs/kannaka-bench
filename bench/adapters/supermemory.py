@@ -68,7 +68,8 @@ class SupermemoryAdapter(Adapter):
 
     def ingest(self, items: Iterable[MemoryItem]) -> None:
         for it in items:
-            body = {"content": it.text, "containerTag": self.tag, "customId": it.id,
+            # customId allows only [A-Za-z0-9_:-]; "<session>#<turn>" carries '#'
+            body = {"content": it.text, "containerTag": self.tag, "customId": it.id.replace("#", "__"),
                     "metadata": {"item_id": it.id, **{k: str(v) for k, v in (it.meta or {}).items() if isinstance(v, (str, int, float, bool))}},
                     "taskType": self.task_type}
             if it.when:
@@ -126,7 +127,8 @@ class SupermemoryAdapter(Adapter):
             if isinstance(md, dict):
                 item_id = md.get("item_id")
             if not item_id:
-                item_id = res.get("customId") or self.by_doc.get(res.get("documentId") or res.get("id") or "")
+                cid = res.get("customId")
+                item_id = (cid.replace("__", "#") if cid else None) or self.by_doc.get(res.get("documentId") or res.get("id") or "")
             if not item_id or item_id in seen:
                 continue
             seen.add(item_id)
