@@ -54,6 +54,22 @@ A run writes `manifest.json` (commit, adapters, dataset sha256, hardware, args) 
 Runs are meant for debain2 (20 cores, 196 GB); the kannaka adapter needs the
 `kannaka` binary on PATH (`KANNAKA_BIN` to override).
 
+Phase 2 (answer accuracy) runs over a finished retrieval run:
+
+```
+BENCH_LLM_URL=http://127.0.0.1:4000/v1 BENCH_LLM_KEY=... BENCH_ANSWER_MODEL=agent-brain \
+python -m bench.answer --run results/<run>/ --adapters kannaka_minilm,vector_numpy [--k 5] \
+    [--full-context recency] [--tag v2]
+```
+
+The answer model sees the top-k hits, each expanded to its turn pair, in time order
+with dates (`BENCH_EXCERPT_CHARS`, default 6000; `BENCH_PAIR_TURNS=0` to disable); a
+judge scores it against the gold. `--full-context <adapter>` makes that adapter's rows the
+plain-context baseline (whole history, capped at `BENCH_FULL_CONTEXT_CHARS`, default 120k —
+those rows are ~90% of the bill). Rows land in `answers[-<tag>].jsonl` with every call's
+token counts; re-runs skip graded rows, and the run stops itself after three consecutive
+LLM errors (an exhausted account fails every row). Ablations: `python -m bench.probe`.
+
 ## Rules
 
 1. Same box, same order, same k for every adapter in a run.
