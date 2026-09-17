@@ -149,7 +149,7 @@ def main(argv=None):
         "adapter_versions": {},
     }
     rows: list[dict] = []
-    done: set = set()
+    finished: set = set()      # (adapter, question id) pairs kept from a --resume
     prev = os.path.join(out_dir, "results.jsonl")
     if a.resume and os.path.exists(prev):
         for line in open(prev, encoding="utf-8"):
@@ -157,12 +157,12 @@ def main(argv=None):
                 r = json.loads(line)
                 if "error" not in r:
                     rows.append(r)
-                    done.add((r["adapter"], r["question_id"]))
-        print(f"resume: keeping {len(rows)} rows, {len(done)} (adapter, question) pairs done", flush=True)
+                    finished.add((r["adapter"], r["question_id"]))
+        print(f"resume: keeping {len(rows)} rows, {len(finished)} (adapter, question) pairs done", flush=True)
     t_start = time.perf_counter()
     for si, (sid, items, questions, level) in enumerate(stores):
         for n, ad in adapters.items():
-            if done and all((n, q.id) in done for q in questions):
+            if finished and all((n, q.id) in finished for q in questions):
                 continue
             run_dir = os.path.join(work, sid)
             try:
