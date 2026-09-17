@@ -43,8 +43,33 @@ def git_commit() -> str:
         return "unknown"
 
 
-def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: str, rows: list, ds: str):
-    """One store: ingest all items once, then ask every question against it."""
+def session_cap(hits, k: int, cap: int, level: str):
+    """Keep at most `cap` hits per session (item id "<session>#<turn>"), in rank
+    order, then cut to k. With cap=0 or a turn-level dataset, plain top-k. The
+    candidate list is deeper than k so the cut is backfilled, not just thinned:
+    a session that owned four of the top-15 slots gives three of them to the
+    next distinct sessions."""
+    if cap <= 0 or level != "session":
+        return hits[:k]
+    seen: dict = {}
+    out = []
+    for h in hits:
+        sid = h.id.rpartition("#")[0] if "#" in h.id else h.id
+        if seen.get(sid, 0) >= cap:
+            continue
+        seen[sid] = seen.get(sid, 0) + 1
+        out.append(h)
+        if len(out) == k:
+            break
+    return out
+
+
+def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: str, rows: list, ds: str,
+              cap: int = 0):
+    """One store: ingest all items once, then ask every question against it.
+    With a session cap the adapter is asked for k*3 candidates and the cap
+    picks the k that go into the row (the row records both)."""
+    k_fetch = k * 3 if cap > 0 else k
     adapter.open(run_dir)
     t0 = time.perf_counter()
     adapter.ingest(items)
@@ -54,16 +79,17 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
     # Many questions on one store (LoCoMo): one process when the adapter can.
     if len(questions) > 1 and hasattr(adapter, "recall_many"):
         t0 = time.perf_counter()
-        all_hits = adapter.recall_many([q.question for q in questions], k)
+        all_hits = adapter.recall_many([q.question for q in questions], k_fetch)
         per_q_ms = (time.perf_counter() - t0) * 1000.0 / max(1, len(questions))
         timed_hits = [(h, per_q_ms) for h in all_hits]
     else:
-        timed_hits = [Adapter.timed(adapter.recall, q.question, k, q.asked_at) for q in questions]
+        timed_hits = [Adapter.timed(adapter.recall, q.question, k_fetch, q.asked_at) for q in questions]
     for q, (hits, ms) in zip(questions, timed_hits):
+        hits = session_cap(hits, k, cap, level)
         ids = [h.id for h in hits]
         rows.append({
             "dataset": ds, "adapter": adapter.name, "question_id": q.id, "qtype": q.qtype,
-            "k": k, "n_items": len(items), "gold": sorted(q.gold_ids), "gold_level": level,
+            "k": k, "session_cap": cap, "k_fetch": k_fetch, "n_items": len(items), "gold": sorted(q.gold_ids), "gold_level": level,
             "hits": ids, "any_hit_at_k": metrics.any_hit_at_k(ids, q.gold_ids, level, k),
             "recall_at_k": metrics.recall_at_k(ids, q.gold_ids, level, k),
             "mrr": metrics.mrr(ids, q.gold_ids, level),
@@ -79,6 +105,8 @@ def main(argv=None):
                     choices=["longmemeval_oracle", "longmemeval_s", "longmemeval_m", "locomo"])
     ap.add_argument("--adapters", default="kannaka,vector_numpy,recency")
     ap.add_argument("--k", type=int, default=5)
+    ap.add_argument("--session-cap", type=int, default=0,
+                    help="at most N turns per session in the top-k (0 = off); candidates fetched at k*3")
     ap.add_argument("--limit", type=int, default=None,
                     help="LongMemEval: questions PER question type (stratified); LoCoMo: questions per conversation")
     ap.add_argument("--out", default="results")
@@ -103,7 +131,7 @@ def main(argv=None):
     adapters = {n: make_adapter(n) for n in names}
     manifest = {
         "run_id": run_id, "started_at": datetime.now(timezone.utc).isoformat(), "commit": git_commit(),
-        "dataset": dsmeta, "adapters": names, "k": a.k, "limit": a.limit,
+        "dataset": dsmeta, "adapters": names, "k": a.k, "session_cap": a.session_cap, "limit": a.limit,
         "host": platform.node(), "platform": platform.platform(), "python": sys.version.split()[0],
         "cpu_count": os.cpu_count(), "stores": len(stores),
         "adapter_versions": {},
@@ -114,7 +142,7 @@ def main(argv=None):
         for n, ad in adapters.items():
             run_dir = os.path.join(work, sid)
             try:
-                run_store(ad, run_dir, items, questions, a.k, level, rows, a.dataset)
+                run_store(ad, run_dir, items, questions, a.k, level, rows, a.dataset, cap=a.session_cap)
                 if n == "kannaka" and getattr(ad, "version", None):
                     manifest["adapter_versions"]["kannaka"] = ad.version
             except Exception as e:
