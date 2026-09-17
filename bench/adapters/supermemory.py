@@ -143,7 +143,18 @@ class SupermemoryAdapter(Adapter):
         return 0   # the server's store is shared; per-store bytes are not exposed
 
     def close(self) -> None:
-        pass
+        """Delete this store's documents. "Self-hosted lite is licensed for up
+        to 10,000 documents" (HTTP 403 document_limit_reached, 2026-09-17,
+        after 19 LongMemEval stores of ~500 turns); the run keeps its rows, the
+        server only ever holds one store. BENCH_SUPERMEMORY_KEEP=1 keeps them."""
+        if os.environ.get("BENCH_SUPERMEMORY_KEEP") == "1":
+            return
+        for did in self.doc_ids:
+            try:
+                _call("DELETE", f"/v3/documents/{did}", timeout=30)
+            except Exception:
+                pass
+        self.doc_ids = []
 
 
 class SupermemoryMemAdapter(SupermemoryAdapter):
