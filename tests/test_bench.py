@@ -90,6 +90,7 @@ def test_recency_is_the_tail():
 def test_kannaka_adapter_parses_and_stays_off_the_swarm():
     with tempfile.TemporaryDirectory() as d:
         a = kad.KannakaAdapter(bin_path="kannaka-stub")
+        a.batch = "0"                       # the per-item path, on purpose
         a.open(d)
         assert a.env["KANNAKA_NATS_URL"] == "nats://127.0.0.1:1"
         assert a.env["KANNAKA_DATA_DIR"].startswith(d)
@@ -109,6 +110,38 @@ def test_kannaka_adapter_parses_and_stays_off_the_swarm():
         hits = a.recall("what did I buy", 5)
         assert [h.id for h in hits] == ["s_late#0", "kannaka:deadbeef-0000-0000-0000-000000000000"]
         assert hits[0].score == 0.9
+
+
+def test_kannaka_adapter_batch_and_fallback():
+    items = [MemoryItem(id="s#0", text="alpha"), MemoryItem(id="s#1", text="beta")]
+    with tempfile.TemporaryDirectory() as d:
+        a = kad.KannakaAdapter(bin_path="kannaka-stub")
+        a.open(d)
+        seen = []
+
+        def batch_ok(args, timeout):
+            seen.append(args[:2])
+            if args[0] == "remember":
+                ndjson = open(args[2], encoding="utf-8").read().splitlines()
+                assert json.loads(ndjson[0]) == {"content": "alpha"}
+                return 0, "aaaaaaaa-0000-0000-0000-000000000001\naaaaaaaa-0000-0000-0000-000000000002\n", "remember --batch: 2 stored, 0 failed\n"
+            return 0, '[{"id":"aaaaaaaa-0000-0000-0000-000000000002","content":"beta","similarity":0.7}]\n[]\n', ""
+        a._batch_run = batch_ok
+        a.ingest(items)
+        assert a.batch_ok is True and a.by_kid["aaaaaaaa-0000-0000-0000-000000000002"] == "s#1"
+        got = a.recall_many(["b?", "zzz"], 3)
+        assert [[h.id for h in hs] for hs in got] == [["s#1"], []]
+        assert seen == [["remember", "--batch"], ["recall", "--batch"]]
+
+        # an older binary: --batch unknown -> per-item path takes over
+        b = kad.KannakaAdapter(bin_path="kannaka-stub")
+        b.open(d)
+        b._batch_run = lambda args, timeout: (2, "", "remember: unknown flag: --batch\n")
+        per_item = []
+        b._run = lambda args: (per_item.append(args[0]) or "bbbbbbbb-0000-0000-0000-000000000001\n")
+        b.ingest(items[:1])
+        assert b.batch_ok is False and per_item == ["remember"]
+        assert b.by_kid["bbbbbbbb-0000-0000-0000-000000000001"] == "s#0"
 
 
 def test_run_end_to_end_with_recency_and_report():

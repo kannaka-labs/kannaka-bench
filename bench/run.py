@@ -50,8 +50,15 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
     ingest_ms = (time.perf_counter() - t0) * 1000.0
     per_item = ingest_ms / max(1, len(items))
     footprint = adapter.footprint_bytes()
-    for q in questions:
-        hits, ms = Adapter.timed(adapter.recall, q.question, k, q.asked_at)
+    # Many questions on one store (LoCoMo): one process when the adapter can.
+    if len(questions) > 1 and hasattr(adapter, "recall_many"):
+        t0 = time.perf_counter()
+        all_hits = adapter.recall_many([q.question for q in questions], k)
+        per_q_ms = (time.perf_counter() - t0) * 1000.0 / max(1, len(questions))
+        timed_hits = [(h, per_q_ms) for h in all_hits]
+    else:
+        timed_hits = [Adapter.timed(adapter.recall, q.question, k, q.asked_at) for q in questions]
+    for q, (hits, ms) in zip(questions, timed_hits):
         ids = [h.id for h in hits]
         rows.append({
             "dataset": ds, "adapter": adapter.name, "question_id": q.id, "qtype": q.qtype,
