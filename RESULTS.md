@@ -219,3 +219,20 @@ Reading it:
   first place where a memory that *consolidates* across sessions could beat cosine on this set.
 - The medium and exact cosine are still tied on everything that matters to a user; the medium's
   cost is 190× recall latency and 27× bytes (kannaka-memory #977).
+
+### Session cap at k=15 (`--session-cap N`, run.py `ed3c019`; cosine first, same 30 questions)
+
+At most N turns per session in the top-15, backfilled from a k×3 candidate list. Adapter-neutral,
+no per-type tuning.
+
+| cosine, k=15 | recall@15 | MRR | multi-session recall | temporal recall |
+|---|---|---|---|---|
+| no cap | 0.950 | 0.921 | 0.80 | 0.90 |
+| cap 3 | 0.950 | 0.921 | 0.80 | 0.90 |
+| cap 2 | 0.958 | 0.922 | 0.85 | 0.90 |
+| **cap 1 (15 distinct sessions)** | **0.983** | **0.929** | **0.95** | **0.95** |
+
+hit@15 stays 1.000 throughout; knowledge-update stays 1.0. One session per slot is the right
+shape for LongMemEval's session-level questions: the answer stage already expands each hit to
+its turn pair, so nothing is lost by taking one turn per session. kannaka_minilm at cap 1 and the
+answer pass for both are running; appended when done.
