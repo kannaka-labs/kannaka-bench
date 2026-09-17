@@ -77,3 +77,19 @@ on/off) is running; its numbers will be appended here, and the fix work starts f
 whichever setting it blames — or from the recall path itself if it blames none.
 
 The earlier oracle-set edge (+0.039 recall@k) does not survive a real haystack.
+
+### Follow-up on the `s` loss (same day)
+
+- **Ablation** (`bench/probe.py`, one question per type, four configs): facet decomposition
+  on/off and timestamps on/off change nothing — identical hit pattern per question. Not the cause.
+- **Root cause found in the store, not the medium:** a fresh kannaka store writes
+  `.encoder = hash:384:42` — a *hashing* encoder with no semantics. The table above therefore
+  compares hash embeddings against MiniLM cosine. It stays, because it is what the shipped
+  binary does for a new user; but it is not a measurement of the medium.
+- **The fair row** is `kannaka_minilm`: the same binary with all-MiniLM-L6-v2 as its encoder —
+  the *identical* weights the `vector_numpy` row uses, served to kannaka through a small
+  in-process server speaking ollama's `/api/embed` (`bench/embed_server.py`), because ollama's
+  own MiniLM embed cost 1.3–2.3 s per call on both lab boxes. Running now on the same 30
+  questions; appended below when done.
+- Two things this surfaced for kannaka-memory regardless of that row: the default encoder for
+  a new store, and recall latency of 2.5–3.9 s per query in-process on a 500-item store.
