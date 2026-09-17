@@ -19,13 +19,18 @@ import time
 
 from . import metrics
 from .adapters.base import Adapter, MemoryItem
-from .adapters.kannaka import KannakaAdapter
+from .adapters.kannaka import KannakaAdapter, KannakaMinilmAdapter
+
+ADAPTERS = {"kannaka": KannakaAdapter, "kannaka_minilm": KannakaMinilmAdapter}
 
 CONFIGS = {
     "default": {"env": {}, "timestamps": True},
     "nofacet": {"env": {"KANNAKA_FACET_DECOMPOSE": "0"}, "timestamps": True},
     "notime": {"env": {}, "timestamps": False},
     "nofacet-notime": {"env": {"KANNAKA_FACET_DECOMPOSE": "0"}, "timestamps": False},
+    # the xi-diversity reranker (kannaka-memory #975): rank by raw resonance instead
+    "xioff": {"env": {"KANNAKA_RECALL_XI_BOOST": "off"}, "timestamps": True},
+    "xioff-nofacet": {"env": {"KANNAKA_RECALL_XI_BOOST": "off", "KANNAKA_FACET_DECOMPOSE": "0"}, "timestamps": True},
 }
 
 
@@ -39,6 +44,7 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=1, help="questions per type")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--configs", default="default,nofacet,notime,nofacet-notime")
+    ap.add_argument("--adapter", default="kannaka", choices=sorted(ADAPTERS))
     ap.add_argument("--out", default="results/probe")
     a = ap.parse_args(argv)
 
@@ -56,7 +62,7 @@ def main(argv=None):
         os.environ.update(cfg["env"])
         hits_n = 0
         for q in qs:
-            ad = KannakaAdapter()
+            ad = ADAPTERS[a.adapter]()
             run_dir = os.path.join(work, cname, q.id)
             os.makedirs(run_dir, exist_ok=True)
             ad.open(run_dir)
@@ -68,7 +74,7 @@ def main(argv=None):
             ids = [h.id for h in hits]
             hit = metrics.any_hit_at_k(ids, q.gold_ids, "session", a.k)
             hits_n += int(hit)
-            row = {"config": cname, "question_id": q.id, "qtype": q.qtype, "n_items": len(items),
+            row = {"config": cname, "adapter": a.adapter, "question_id": q.id, "qtype": q.qtype, "n_items": len(items),
                    "hit": hit, "recall_at_k": metrics.recall_at_k(ids, q.gold_ids, "session", a.k),
                    "hits": ids, "gold": sorted(q.gold_ids), "ingest_s": round(ingest_s, 1), "recall_ms": round(ms)}
             rows.append(row)
