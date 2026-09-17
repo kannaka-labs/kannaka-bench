@@ -118,6 +118,26 @@ def _turn_key(item_id: str):
     return (sid, int(t)) if sid and t.isdigit() else (item_id, 0)
 
 
+def with_siblings(hit_ids, candidates, per_session: int, max_excerpts: int):
+    """Hits plus up to per_session-1 further turns of each hit's session taken
+    from the deeper candidate list in rank order; sessions keep the hits'
+    order; the result is cut to max_excerpts (before pair expansion)."""
+    if per_session <= 1 or not candidates:
+        return hit_ids[:max_excerpts]
+    by_session: dict = {}
+    for c in candidates:
+        by_session.setdefault(c.rpartition("#")[0] if "#" in c else c, []).append(c)
+    out, seen = [], set()
+    for h in hit_ids:
+        sid = h.rpartition("#")[0] if "#" in h else h
+        picked = [h] + [c for c in by_session.get(sid, []) if c != h][: per_session - 1]
+        for c in picked:
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+    return out[:max_excerpts]
+
+
 def expand_pairs(hit_ids, by_id):
     """The hits plus each one's conversational partner turn, deduplicated and
     in history order (LongMemEval ids are <session>#<turn>; other datasets
@@ -151,6 +171,9 @@ def main(argv=None):
     ap.add_argument("--full-context", default="", help="adapter name(s) whose answer sees the WHOLE history instead of hits")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--tag", default="", help="write answers-<tag>.jsonl instead of answers.jsonl")
+    ap.add_argument("--per-session", type=int, default=1,
+                    help="turns per hit session shown to the model, filled from the row's candidates (default 1)")
+    ap.add_argument("--max-excerpts", type=int, default=40, help="cap on excerpts before pair expansion")
     a = ap.parse_args(argv)
 
     url = os.environ.get("BENCH_LLM_URL", "http://127.0.0.1:4000/v1")
@@ -194,7 +217,7 @@ def main(argv=None):
                 text = text[-FULL_CONTEXT_CHAR_CAP:]
             mode = "full-context"
         else:
-            ctx_items = expand_pairs(r["hits"][:k], by_id)
+            ctx_items = expand_pairs(with_siblings(r["hits"][:k], r.get("candidates") or [], a.per_session, a.max_excerpts), by_id)
             text = format_excerpts(ctx_items, r["gold_level"])
             mode = f"top-{k}"
         asked = q.asked_at.strftime("%Y-%m-%d") if q.asked_at else "unknown date"
@@ -222,6 +245,7 @@ def main(argv=None):
         correct = verdict.strip().upper().startswith("CORRECT")
         row = {"adapter": r["adapter"], "question_id": r["question_id"], "qtype": r["qtype"], "mode": mode,
                "n_excerpts": len(ctx_items), "excerpt_cap": EXCERPT_CHAR_CAP, "pair_turns": PAIR_TURNS,
+               "per_session": a.per_session, "max_excerpts": a.max_excerpts,
                "hit_at_k": r["any_hit_at_k"], "answer": answer, "gold": q.answer, "verdict": verdict, "correct": correct,
                "answer_model": answer_model, "judge_model": judge_model, "answer_ms": round(ans_ms),
                "tokens": {"answer": au, "judge": ju}}

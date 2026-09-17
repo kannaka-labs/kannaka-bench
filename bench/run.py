@@ -85,11 +85,13 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
     else:
         timed_hits = [Adapter.timed(adapter.recall, q.question, k_fetch, q.asked_at) for q in questions]
     for q, (hits, ms) in zip(questions, timed_hits):
+        candidates = [h.id for h in hits]          # everything the adapter returned, rank order
         hits = session_cap(hits, k, cap, level)
         ids = [h.id for h in hits]
         rows.append({
             "dataset": ds, "adapter": adapter.name, "question_id": q.id, "qtype": q.qtype,
             "k": k, "session_cap": cap, "k_fetch": k_fetch, "n_items": len(items), "gold": sorted(q.gold_ids), "gold_level": level,
+            "candidates": candidates,
             "hits": ids, "any_hit_at_k": metrics.any_hit_at_k(ids, q.gold_ids, level, k),
             "recall_at_k": metrics.recall_at_k(ids, q.gold_ids, level, k),
             "mrr": metrics.mrr(ids, q.gold_ids, level),
