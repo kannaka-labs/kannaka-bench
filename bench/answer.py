@@ -35,10 +35,25 @@ FULL_CONTEXT_CHAR_CAP = int(os.environ.get("BENCH_FULL_CONTEXT_CHARS", "120000")
 class LlmError(RuntimeError):
     pass
 
+
+# Phase 2 v1 (2026-09-17) cut every excerpt at 1500 chars: 28% of LongMemEval
+# turns are longer (p90 2556) and the answer model said "cut off" out loud.
+EXCERPT_CHAR_CAP = int(os.environ.get("BENCH_EXCERPT_CHARS", "6000"))
+# Each retrieved turn is shown with its neighbour (the assistant reply that
+# follows a user turn, or the user turn before an assistant one): many gold
+# answers live in the reply to the retrieved turn ("what did you recommend?").
+PAIR_TURNS = os.environ.get("BENCH_PAIR_TURNS", "1") not in ("0", "false", "no")
+
 ANSWER_SYS = ("You are answering a question about a user's past conversations with an assistant. You are given "
-              "excerpts retrieved from those conversations (they may be irrelevant or incomplete) and the date the "
-              "question is asked. Answer briefly and concretely from the excerpts. If the excerpts do not contain the "
-              "answer, say \"I don't know\".")
+              "excerpts retrieved from those conversations, in chronological order, each with its date, and the "
+              "date the question is asked. They may be irrelevant or incomplete. Answer briefly and concretely from "
+              "the excerpts. If two excerpts state conflicting facts, the most recent one is current. If the "
+              "excerpts do not contain the answer, say \"I don't know\".")
+ANSWER_SYS_PREFERENCE = ("You are answering a question about a user's past conversations with an assistant. You are "
+                         "given excerpts retrieved from those conversations, in chronological order with dates. The "
+                         "user is asking for a suggestion or recommendation: answer it, and make the answer fit what "
+                         "the excerpts show about the user's situation, tastes and constraints, naming those specifics. "
+                         "Do not say \"I don't know\": if the excerpts show nothing relevant, give a generic answer.")
 JUDGE_SYS = ("You are grading an answer to a question against a reference answer. Reply with exactly one word: "
              "CORRECT if the answer conveys the same fact(s) as the reference (wording may differ; extra correct "
              "detail is fine), otherwise INCORRECT. An answer of \"I don't know\" is INCORRECT unless the reference "
@@ -89,12 +104,43 @@ def load_questions(dataset: str, limit):
     return {q.id: (q, {it.id: it for it in q.items}, q.items) for q in qs}
 
 
-def format_excerpts(items, gold_level: str) -> str:
+def format_excerpts(items, gold_level: str, cap: int | None = None) -> str:
+    cap = cap or EXCERPT_CHAR_CAP
     lines = []
     for it in items:
         when = it.when.strftime("%Y-%m-%d") if it.when else "undated"
-        lines.append(f"[{when}] {it.text[:1500]}")
+        lines.append(f"[{when}] {it.text[:cap]}")
     return "\n\n".join(lines) if lines else "(nothing retrieved)"
+
+
+def _turn_key(item_id: str):
+    sid, _, t = item_id.rpartition("#")
+    return (sid, int(t)) if sid and t.isdigit() else (item_id, 0)
+
+
+def expand_pairs(hit_ids, by_id):
+    """The hits plus each one's conversational partner turn, deduplicated and
+    in history order (LongMemEval ids are <session>#<turn>; other datasets
+    keep the hits as they are)."""
+    keep = []
+    seen = set()
+    for h in hit_ids:
+        if h not in by_id:
+            continue
+        sid, _, t = h.rpartition("#")
+        cands = [h]
+        if PAIR_TURNS and sid and t.isdigit():
+            ti = int(t)
+            me = by_id[h]
+            partner = f"{sid}#{ti + 1}" if me.text.startswith("user:") else f"{sid}#{ti - 1}"
+            if partner in by_id:
+                cands.append(partner)
+        for c in cands:
+            if c not in seen:
+                seen.add(c)
+                keep.append(by_id[c])
+    keep.sort(key=lambda it: ((it.when or __import__("datetime").datetime.min.replace(tzinfo=__import__("datetime").timezone.utc)), _turn_key(it.id)))
+    return keep
 
 
 def main(argv=None):
@@ -104,6 +150,7 @@ def main(argv=None):
     ap.add_argument("--adapters", default=None, help="comma list; default all in the run")
     ap.add_argument("--full-context", default="", help="adapter name(s) whose answer sees the WHOLE history instead of hits")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--tag", default="", help="write answers-<tag>.jsonl instead of answers.jsonl")
     a = ap.parse_args(argv)
 
     url = os.environ.get("BENCH_LLM_URL", "http://127.0.0.1:4000/v1")
@@ -124,7 +171,7 @@ def main(argv=None):
     full = set(x for x in a.full_context.split(",") if x)
     qmap = load_questions("locomo" if dataset.startswith("locomo") else dataset, limit)
 
-    out_path = os.path.join(a.run, "answers.jsonl")
+    out_path = os.path.join(a.run, f"answers-{a.tag}.jsonl" if a.tag else "answers.jsonl")
     done = {}
     if os.path.exists(out_path):
         for l in open(out_path, encoding="utf-8"):
@@ -147,14 +194,15 @@ def main(argv=None):
                 text = text[-FULL_CONTEXT_CHAR_CAP:]
             mode = "full-context"
         else:
-            ctx_items = [by_id[h] for h in r["hits"][:k] if h in by_id]
+            ctx_items = expand_pairs(r["hits"][:k], by_id)
             text = format_excerpts(ctx_items, r["gold_level"])
             mode = f"top-{k}"
         asked = q.asked_at.strftime("%Y-%m-%d") if q.asked_at else "unknown date"
         user = f"Question date: {asked}\n\nExcerpts:\n{text}\n\nQuestion: {q.question}"
+        system = ANSWER_SYS_PREFERENCE if "preference" in (r.get("qtype") or "") else ANSWER_SYS
         t0 = time.perf_counter()
         try:
-            answer, au = chat(url, key, answer_model, ANSWER_SYS, user, max_tokens=200)
+            answer, au = chat(url, key, answer_model, system, user, max_tokens=200)
             ans_ms = (time.perf_counter() - t0) * 1000
             verdict, ju = chat(url, key, judge_model, JUDGE_SYS,
                                f"Question: {q.question}\nReference answer: {q.answer}\nAnswer to grade: {answer}\n\nOne word: CORRECT or INCORRECT.",
@@ -173,6 +221,7 @@ def main(argv=None):
         globals()["_consec"] = 0
         correct = verdict.strip().upper().startswith("CORRECT")
         row = {"adapter": r["adapter"], "question_id": r["question_id"], "qtype": r["qtype"], "mode": mode,
+               "n_excerpts": len(ctx_items), "excerpt_cap": EXCERPT_CHAR_CAP, "pair_turns": PAIR_TURNS,
                "hit_at_k": r["any_hit_at_k"], "answer": answer, "gold": q.answer, "verdict": verdict, "correct": correct,
                "answer_model": answer_model, "judge_model": judge_model, "answer_ms": round(ans_ms),
                "tokens": {"answer": au, "judge": ju}}
