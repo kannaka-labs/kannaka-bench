@@ -247,3 +247,19 @@ turns, not just the sessions. So session diversity and within-session coverage t
 other at a fixed budget, and the cap alone is the wrong knob. Next: keep the candidate list per
 row and let the answer stage take the top-M turns of each selected session (`--per-session`),
 measured offline on the same retrieval rows.
+
+**Answer-stage shapes on the same cosine k=15 rows** (`--per-session M` takes the top-M turns of
+each selected session from the k×3 candidate list; every row pair-expanded, chronological):
+
+| shape (cosine, k=15) | excerpts/q | prompt tok/q | accuracy | multi-session | single-session-assistant |
+|---|---|---|---|---|---|
+| **no cap, top-15 turns** | ~30 | **5 422** | **0.733** | 0/5 | 5/5 |
+| cap 1, 1 turn/session | ~30 | 6 240 | 0.500 | 1/5 | 1/5 |
+| cap 1, 2 turns/session | 35 | 8 753 | 0.633 | **2/5** | 4/5 |
+| cap 1, 3 turns/session | 43 | 10 962 | 0.567 | 2/5 | 3/5 |
+
+Verdict: **the plain ranked top-15 turns is the best shape at every budget tried**; more excerpts
+cost accuracy, not just tokens. Session diversity buys two multi-session answers and loses more
+elsewhere. k=15, no cap, turn pairs stays the standard setting. Multi-session (counting across
+3+ sessions) remains the open loss for every system on this set — an aggregation problem the
+answer stage cannot fix by widening, which is the case for a memory that consolidates.
