@@ -24,7 +24,16 @@ import time
 import urllib.request
 from collections import defaultdict
 
-FULL_CONTEXT_CHAR_CAP = int(os.environ.get("BENCH_FULL_CONTEXT_CHARS", "400000"))
+# The plain-context baseline sends the whole history. At 400k chars that was
+# ~94k prompt tokens per question (2026-09-17) — five such rows cost more than
+# the other forty combined and, on a low balance, ended the run. 120k chars is
+# ~30k tokens: still far beyond any retrieval window, honest as a "give the
+# model everything" floor, and a cost a run can afford to repeat.
+FULL_CONTEXT_CHAR_CAP = int(os.environ.get("BENCH_FULL_CONTEXT_CHARS", "120000"))
+
+
+class LlmError(RuntimeError):
+    pass
 
 ANSWER_SYS = ("You are answering a question about a user's past conversations with an assistant. You are given "
               "excerpts retrieved from those conversations (they may be irrelevant or incomplete) and the date the "
@@ -41,6 +50,7 @@ def chat(url: str, key: str, model: str, system: str, user: str, max_tokens: int
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
     req = urllib.request.Request(url.rstrip("/") + "/chat/completions", data=json.dumps(body).encode("utf-8"),
                                  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    last = None
     for attempt in range(4):
         try:
             with urllib.request.urlopen(req, timeout=180) as r:
@@ -48,11 +58,20 @@ def chat(url: str, key: str, model: str, system: str, user: str, max_tokens: int
             text = ((d.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
             u = d.get("usage") or {}
             return text.strip(), {"prompt": u.get("prompt_tokens"), "completion": u.get("completion_tokens")}
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", "replace")[:400]
+            except Exception:  # noqa: BLE001
+                pass
+            last = LlmError(f"HTTP {e.code}: {body}")
+            # 4xx other than rate limiting will not get better by retrying
+            if e.code < 500 and e.code != 429:
+                raise last
         except Exception as e:  # noqa: BLE001
-            if attempt == 3:
-                raise
-            time.sleep(2 * (attempt + 1))
-    return "", {}
+            last = LlmError(f"{type(e).__name__}: {str(e)[:200]}")
+        time.sleep(2 * (attempt + 1))
+    raise last or LlmError("no response")
 
 
 def load_questions(dataset: str, limit):
@@ -134,11 +153,24 @@ def main(argv=None):
         asked = q.asked_at.strftime("%Y-%m-%d") if q.asked_at else "unknown date"
         user = f"Question date: {asked}\n\nExcerpts:\n{text}\n\nQuestion: {q.question}"
         t0 = time.perf_counter()
-        answer, au = chat(url, key, answer_model, ANSWER_SYS, user, max_tokens=200)
-        ans_ms = (time.perf_counter() - t0) * 1000
-        verdict, ju = chat(url, key, judge_model, JUDGE_SYS,
-                           f"Question: {q.question}\nReference answer: {q.answer}\nAnswer to grade: {answer}\n\nOne word: CORRECT or INCORRECT.",
-                           max_tokens=5)
+        try:
+            answer, au = chat(url, key, answer_model, ANSWER_SYS, user, max_tokens=200)
+            ans_ms = (time.perf_counter() - t0) * 1000
+            verdict, ju = chat(url, key, judge_model, JUDGE_SYS,
+                               f"Question: {q.question}\nReference answer: {q.answer}\nAnswer to grade: {answer}\n\nOne word: CORRECT or INCORRECT.",
+                               max_tokens=5)
+        except LlmError as e:
+            # Not graded: recorded as an error row (not counted as wrong), and the
+            # run keeps going — but an out-of-credit or auth failure will hit every
+            # row, so stop after a few in a row rather than burn the whole run.
+            print(f"[{r['adapter']:14}] {r['question_id'][:12]} LLM ERROR: {e}", flush=True)
+            consecutive_errors = globals().get("_consec", 0) + 1
+            globals()["_consec"] = consecutive_errors
+            if consecutive_errors >= 3:
+                print("three consecutive LLM errors — stopping; nothing below was graded", flush=True)
+                break
+            continue
+        globals()["_consec"] = 0
         correct = verdict.strip().upper().startswith("CORRECT")
         row = {"adapter": r["adapter"], "question_id": r["question_id"], "qtype": r["qtype"], "mode": mode,
                "hit_at_k": r["any_hit_at_k"], "answer": answer, "gold": q.answer, "verdict": verdict, "correct": correct,
