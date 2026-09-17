@@ -93,3 +93,37 @@ The earlier oracle-set edge (+0.039 recall@k) does not survive a real haystack.
   questions; appended below when done.
 - Two things this surfaced for kannaka-memory regardless of that row: the default encoder for
   a new store, and recall latency of 2.5–3.9 s per query in-process on a 500-item store.
+
+### The fair row: same embeddings, medium vs exact cosine (`longmemeval_s`, same 30 questions, k=5)
+
+`kannaka_minilm` = the kannaka binary at `2b35b46` with all-MiniLM-L6-v2 as its encoder, served
+through `bench/embed_server.py` — the *identical* weights and normalisation the `vector_numpy` row
+uses. Run `s-5pertype-kannaka-minilm2`.
+
+| adapter | n | hit@k | recall@k | MRR | recall p50 ms | p95 ms | ingest ms/item | bytes/item |
+|---|---|---|---|---|---|---|---|---|
+| vector_numpy (MiniLM, exact cosine) | 30 | **0.967** | **0.861** | **0.918** | **246** | 406 | **17.2** | **1 556** |
+| kannaka_minilm (medium + ξ reranker) | 30 | 0.933 | 0.828 | 0.911 | 2 817 | 4 169 | 381.3 | 42 229 |
+| kannaka (shipped default, hash encoder) | 30 | 0.533 | 0.444 | 0.422 | 2 661 | 4 461 | 187.0 | 42 229 |
+| recency | 30 | 0.100 | 0.058 | 0.100 | 0 | 0 | 0.0 | 1 044 |
+
+hit@k by type (n=5): kannaka_minilm — knowledge-update 1.0, multi-session 0.8, single-session-
+assistant 1.0, single-session-preference 1.0, single-session-user 0.8, temporal-reasoning 1.0.
+vector_numpy differs only on single-session-user (1.0).
+
+Reading it:
+- **The encoder was the loss.** Given the same embeddings, the medium retrieves within 0.034 hit@k
+  and 0.007 MRR of exact cosine on this set — one question in thirty. The 0.533 row is what a new
+  user gets today, and that is a default-encoder decision, not a property of the medium.
+- **It is not (yet) better than cosine either.** On retrieval alone, at ~500 items, the medium
+  matches a numpy dot product; it does not beat it. Whatever the medium adds has to show up in the
+  answer-quality phase, in consolidation over time, or at larger scale — this table does not show it.
+- **Latency and footprint are the real losses:** recall 11× slower at p50 (the process-per-recall
+  shape plus a store save on every recall — `resonate_query` observes and marks dirty), ingest 22×
+  slower per item, 27× the bytes per item.
+- **The ξ-diversity reranker is a non-factor here:** with `KANNAKA_RECALL_XI_BOOST=off` (kannaka-memory
+  #975) the six probe questions came out hit-for-hit identical (5/6 either way), and the one traced
+  inversion it caused (gold 5th → 8th) was a miss under both. Facet decomposition on/off with these
+  embeddings is running; appended when done.
+
+The earlier partial (0.778 at n=9) was an early-sample artefact; the full 30 is the number.
