@@ -35,3 +35,45 @@ What changes next: kannaka-memory #973 added `remember --batch` / `recall --batc
 (one process per store); the suite uses them when the binary has them. The next
 table is `longmemeval_s` with that binary — the first run that measures the medium
 rather than the spawn.
+
+## 2026-09-17 — LongMemEval `s`, 30 questions (5 per type), k=5 (debain2)
+
+The first run that measures the medium: ~500 items per store, one fresh store per
+question, kannaka at `e410d55` with `remember --batch` (one process, one cache
+rebuild per store). Same questions, same order, same k for all three.
+
+| adapter | n | hit@k | recall@k | MRR | recall p50 ms | p95 ms | ingest ms/item | bytes/item |
+|---|---|---|---|---|---|---|---|---|
+| vector_numpy (MiniLM, exact cosine) | 30 | **0.967** | **0.861** | **0.918** | 246 | 406 | 17.2 | 1 556 |
+| kannaka | 30 | 0.533 | 0.444 | 0.422 | 2 661 | 4 461 | 187.0 | 42 229 |
+| recency (plain-context floor) | 30 | 0.100 | 0.058 | 0.100 | 0 | 0 | 0.0 | 1 044 |
+
+hit@k by question type (n=5 each):
+
+| type | kannaka | vector_numpy | recency |
+|---|---|---|---|
+| knowledge-update | 0.800 | 1.000 | 0.200 |
+| multi-session | 0.400 | 0.800 | 0.000 |
+| single-session-assistant | 0.200 | 1.000 | 0.000 |
+| single-session-preference | 1.000 | 1.000 | 0.000 |
+| single-session-user | 0.400 | 1.000 | 0.000 |
+| temporal-reasoning | 0.400 | 1.000 | 0.400 |
+
+Run: `s-5pertype-all3`; dataset sha256 `08d8dad4be43…`.
+
+**kannaka loses this one on every axis.** At ~500 memories per store, exact cosine
+over the same encoder family finds the evidence session 97% of the time; kannaka
+finds it 53% of the time, ranks it worse when it does (MRR 0.42 vs 0.92), answers
+10× slower and stores 27× more bytes per item. The one type it holds is
+single-session-preference (5/5 for both); it is weakest where the evidence is a
+single assistant turn (1/5) and on multi-session questions (2/5).
+
+What the misses look like (from `results.jsonl`): no facet or dream ids leak into
+the top-k; kannaka's five hits often carry the *same* session two or three times
+(turn-level duplicates crowding k), and on the clean misses the returned sessions
+are unrelated — so this is ranking quality on a 500-item store, not a scoring
+artefact. An ablation (`bench/probe.py`: facet decomposition on/off × timestamps
+on/off) is running; its numbers will be appended here, and the fix work starts from
+whichever setting it blames — or from the recall path itself if it blames none.
+
+The earlier oracle-set edge (+0.039 recall@k) does not survive a real haystack.
