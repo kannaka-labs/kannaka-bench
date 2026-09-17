@@ -187,3 +187,35 @@ extraction + contradiction resolution + expiry over retrieval; default embedding
 local binary, ollama offline. No accuracy, judge or answer model published. Not comparable to the
 tables above yet (k=15 vs k=5; recall vs accuracy). Planned: a `supermemory` adapter over the local
 binary, a ConvoMem loader, and k=15 for everyone — issue #1.
+
+## 2026-09-17 — k=15 (`longmemeval_s`, same 30 questions): retrieval and answer accuracy
+
+Run `s-5pertype-k15` (debain2, MiniLM through `bench/embed_server.py` for both retrieval adapters;
+answer stage v2, `answers-v2.jsonl`, kannaka_minilm and vector_numpy only — the plain-context
+baseline does not depend on k and stands at 0.27 from the k=5 pass).
+
+| adapter | hit@5 | hit@10 | hit@15 | recall@15 | MRR | recall p50 ms | answer accuracy @15 | prompt tok/q |
+|---|---|---|---|---|---|---|---|---|
+| kannaka_minilm | 0.933 | 0.967 | **1.000** | 0.950 | 0.918 | 2 686 | **0.733** | 5 471 |
+| vector_numpy (MiniLM cosine) | 0.967 | 1.000 | **1.000** | 0.950 | 0.921 | 14 | **0.733** | 5 422 |
+| recency (last-k) | 0.100 | 0.100 | 0.167 | 0.125 | 0.106 | 0 | — | — |
+
+Answer accuracy by type at k=15 (n=5 each), kannaka_minilm / vector_numpy: knowledge-update 0.80 /
+0.80; multi-session **0.20 / 0.00**; single-session-assistant 1.00 / 1.00; preference 0.80 / 1.00;
+single-session-user 0.80 / 0.80; temporal 0.80 / 0.80. "I don't know" fell to 1 of 30 for both.
+
+Reading it:
+- **Widening the window from 5 to 15 lifts final accuracy from 0.63 to 0.73 for both**, at ~2.6×
+  the prompt tokens (still ~5k, versus ~29k for the capped plain-context baseline that scores 0.27).
+- **Every question has a gold session in the top 15** for both retrieval adapters, all six types.
+  For the record against Supermemory's published "95% Recall@15": our session-level hit@15 is 1.00
+  and our recall@15 (fraction of *all* gold sessions found) is 0.95 on this 30-question stratified
+  set. Whether their number is hit or recall, and on which subset, is not published, so this is a
+  neighbourhood, not a ranking.
+- **Multi-session is now an aggregation loss, not a retrieval one.** Those questions average 3.2
+  gold sessions; recall@15 for them is 0.80 for both adapters, and the answers count "2 items"
+  where the gold is 3, "one project" where the gold is 2. The missing session is the missing
+  count. Next: per-type k (or a second retrieval pass conditioned on the first) — and it is the
+  first place where a memory that *consolidates* across sessions could beat cosine on this set.
+- The medium and exact cosine are still tied on everything that matters to a user; the medium's
+  cost is 190× recall latency and 27× bytes (kannaka-memory #977).
