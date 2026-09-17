@@ -81,14 +81,17 @@ class SupermemoryAdapter(Adapter):
                 self.by_doc[did] = it.id
         self._drain()
 
-    def _drain(self, timeout_s: float = 3600.0):
-        """Wait until no document of this store is still processing. The
-        status endpoint is GET /v3/documents/{id}; an unknown status string is
-        treated as pending until it stops changing."""
+    def _drain(self, timeout_s: float = float(os.environ.get("BENCH_SUPERMEMORY_DRAIN_S", "7200"))):
+        """Wait until every document of this store reports a terminal status
+        (GET /v3/documents/{id}: queued -> extracting -> embedding -> indexing
+        -> done). A store searched before its documents are indexed would
+        score retrieval against a partial index and look like a miss, so an
+        incomplete drain is an ERROR for the row, never a silent partial.
+        (2026-09-17: the server paused its ingest queue at its 1 GB ingest
+        memory limit and the old give-up-after-60 s drain let two questions
+        through against half-built stores.)"""
         t0 = time.time()
         pending = list(self.doc_ids)
-        last_seen: dict[str, str] = {}
-        stable_rounds = 0
         while pending and time.time() - t0 < timeout_s:
             still = []
             for did in pending:
@@ -103,16 +106,12 @@ class SupermemoryAdapter(Adapter):
                 if st in TERMINAL:
                     continue
                 still.append(did)
-                last_seen[did] = st
-            if still == pending:
-                stable_rounds += 1
-            else:
-                stable_rounds = 0
             pending = still
             if pending:
-                if stable_rounds >= 20:      # nothing moved in ~60 s: the server does not report a terminal state
-                    break
-                time.sleep(3)
+                time.sleep(5)
+        if pending:
+            raise RuntimeError(f"supermemory ingest incomplete after {int(time.time() - t0)}s: {len(pending)} of "
+                               f"{len(self.doc_ids)} documents not done (server queue paused or stalled?)")
 
     def recall(self, query: str, k: int, when: datetime | None = None) -> list[RecallHit]:
         body = {"q": query[:2000], "containerTag": self.tag, "limit": min(max(k, 1), 100),

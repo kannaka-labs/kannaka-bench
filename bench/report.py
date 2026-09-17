@@ -33,11 +33,15 @@ def summarize(rows: list[dict]) -> dict:
             out[name] = {"n": 0, "errors": errors}
             continue
         k = ok[0]["k"]
+        # Rows with no gold evidence (ConvoMem abstention: the right answer is
+        # "no information") have no retrieval score; they count in n but not
+        # in hit/recall/MRR, and their type shows n/a.
+        scored = [r for r in ok if r.get("gold")] or ok
         out[name] = {
-            "n": len(ok), "errors": errors, "k": k,
-            "any_hit_at_k": sum(1 for r in ok if r["any_hit_at_k"]) / len(ok),
-            "recall_at_k": sum(r["recall_at_k"] for r in ok) / len(ok),
-            "mrr": sum(r["mrr"] for r in ok) / len(ok),
+            "n": len(ok), "errors": errors, "k": k, "unscored": len(ok) - len([r for r in ok if r.get("gold")]),
+            "any_hit_at_k": sum(1 for r in scored if r["any_hit_at_k"]) / len(scored),
+            "recall_at_k": sum(r["recall_at_k"] for r in scored) / len(scored),
+            "mrr": sum(r["mrr"] for r in scored) / len(scored),
             "recall_p50_ms": metrics.percentile([r["recall_ms"] for r in ok], 0.5),
             "recall_p95_ms": metrics.percentile([r["recall_ms"] for r in ok], 0.95),
             "ingest_ms_per_item": sum(r["ingest_ms_per_item"] for r in ok) / len(ok),
@@ -48,7 +52,8 @@ def summarize(rows: list[dict]) -> dict:
         for r in ok:
             types[r.get("qtype") or "?"].append(r)
         for t, trs in sorted(types.items()):
-            out[name]["by_qtype"][t] = {"n": len(trs), "any_hit_at_k": sum(1 for r in trs if r["any_hit_at_k"]) / len(trs)}
+            sc = [r for r in trs if r.get("gold")]
+            out[name]["by_qtype"][t] = {"n": len(trs), "any_hit_at_k": (sum(1 for r in sc if r["any_hit_at_k"]) / len(sc)) if sc else float("nan")}
     return out
 
 
