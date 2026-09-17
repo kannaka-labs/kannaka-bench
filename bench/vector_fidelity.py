@@ -6,6 +6,13 @@ baselines are not comparable to it turn for turn.
 
   python -m bench.vector_fidelity --store /tmp/kannaka-probe-*/xioff/<qid>/kannaka \
       --bin <kannaka> --embed-url http://127.0.0.1:11436 [--sample 40]
+
+CAVEAT (2026-09-17): `kannaka export-json` dumps the legacy FLAT medium
+(10 000-dim, the consciousness-metrics representation), not the chiral
+hemisphere rows that recall actually ranks over - so this tool's "stored"
+vectors are the wrong representation for that question (mean cosine ~0 is
+expected). Kept for the flat path and until an export of chiral rows exists;
+`add_wavefront` stores the raw zero-padded embedding, verified by reading.
 """
 from __future__ import annotations
 
