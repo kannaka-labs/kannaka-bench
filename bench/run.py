@@ -78,7 +78,8 @@ def main(argv=None):
                     choices=["longmemeval_oracle", "longmemeval_s", "longmemeval_m", "locomo"])
     ap.add_argument("--adapters", default="kannaka,vector_numpy,recency")
     ap.add_argument("--k", type=int, default=5)
-    ap.add_argument("--limit", type=int, default=None, help="questions (LongMemEval) / questions per conversation (LoCoMo)")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="LongMemEval: questions PER question type (stratified); LoCoMo: questions per conversation")
     ap.add_argument("--out", default="results")
     ap.add_argument("--name", default=None)
     a = ap.parse_args(argv)

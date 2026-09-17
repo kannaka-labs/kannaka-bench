@@ -58,6 +58,14 @@ def test_longmemeval_loader_orders_history_and_keeps_gold():
     assert longmemeval.questions_from(lme2)[0].gold_ids == {"s_late"}
 
 
+def test_longmemeval_limit_is_per_type():
+    data = [dict(LME[0], question_id=f"q{i}", question_type=t) for i, t in enumerate(
+        ["a", "a", "a", "b", "a", "b", "c"])]
+    qs = longmemeval.questions_from(data, limit=2)
+    assert [(q.id, q.qtype) for q in qs] == [("q0", "a"), ("q1", "a"), ("q3", "b"), ("q5", "b"), ("q6", "c")]
+    assert len(longmemeval.questions_from(data, limit=None)) == 7
+
+
 def test_locomo_loader_turn_level():
     convs = locomo.conversations_from(LOCO)
     cid, items, qs = convs[0]

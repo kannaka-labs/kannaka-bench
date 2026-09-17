@@ -67,9 +67,25 @@ def fetch(variant: str) -> str:
     return path
 
 
+def stratified(data: list[dict], limit: int | None) -> list[dict]:
+    """The first N questions of the file are not a sample of it (the first 50
+    of longmemeval_s are all single-session-user). Take N per question type,
+    in file order within a type, then restore file order."""
+    if not limit:
+        return list(data)
+    taken: dict[str, int] = {}
+    keep = []
+    for i, q in enumerate(data):
+        t = q.get("question_type", "")
+        if taken.get(t, 0) < limit:
+            taken[t] = taken.get(t, 0) + 1
+            keep.append(i)
+    return [data[i] for i in keep]
+
+
 def questions_from(data: list[dict], limit: int | None = None) -> list[Question]:
     out = []
-    for q in data[: limit or None]:
+    for q in stratified(data, limit):
         items: list[MemoryItem] = []
         sids = q.get("haystack_session_ids") or []
         dates = q.get("haystack_dates") or []
@@ -98,4 +114,5 @@ def questions_from(data: list[dict], limit: int | None = None) -> list[Question]
 def load(variant: str = "longmemeval_oracle", limit: int | None = None) -> tuple[list[Question], dict]:
     path = fetch(variant)
     data = json.load(open(path, encoding="utf-8"))
-    return questions_from(data, limit), {"dataset": variant, "path": path, "sha256": sha256_file(path), "questions_total": len(data)}
+    return questions_from(data, limit), {"dataset": variant, "path": path, "sha256": sha256_file(path), "questions_total": len(data),
+                                         "limit_is_per_type": bool(limit)}
