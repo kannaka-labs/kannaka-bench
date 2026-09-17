@@ -174,3 +174,23 @@ class KannakaAdapter(Adapter):
 
     def close(self) -> None:
         pass
+
+
+class KannakaMinilmAdapter(KannakaAdapter):
+    """kannaka with the all-MiniLM-L6-v2 encoder (via ollama) instead of the
+    shipped default. A fresh store's `.encoder` reads `hash:384:42`: a hashing
+    encoder, no semantics — which is what the first longmemeval_s row (hit@k
+    0.533 vs 0.967 for MiniLM cosine) actually measured. This row asks the
+    fair question: same encoder family, does the medium rank better or worse
+    than exact cosine? Needs `ollama pull all-minilm` on the box.
+    BENCH_OLLAMA_URL overrides the endpoint."""
+    name = "kannaka_minilm"
+
+    def open(self, run_dir: str) -> None:
+        super().open(run_dir)
+        self.env.update({
+            "KANNAKA_ENCODER": "ollama",
+            "KANNAKA_ENCODER_URL": os.environ.get("BENCH_OLLAMA_URL", "http://127.0.0.1:11434"),
+            "KANNAKA_ENCODER_MODEL": os.environ.get("BENCH_OLLAMA_EMBED_MODEL", "all-minilm"),
+            "KANNAKA_ENCODER_DIM": "384",
+        })

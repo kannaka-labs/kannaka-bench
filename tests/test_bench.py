@@ -120,6 +120,18 @@ def test_kannaka_adapter_parses_and_stays_off_the_swarm():
         assert hits[0].score == 0.9
 
 
+def test_kannaka_minilm_adapter_sets_the_encoder():
+    with tempfile.TemporaryDirectory() as d:
+        a = kad.KannakaMinilmAdapter(bin_path="kannaka-stub")
+        a.open(d)
+        assert a.name == "kannaka_minilm"
+        assert a.env["KANNAKA_ENCODER"] == "ollama" and a.env["KANNAKA_ENCODER_MODEL"] == "all-minilm"
+        assert a.env["KANNAKA_ENCODER_DIM"] == "384" and a.env["KANNAKA_NATS_URL"] == "nats://127.0.0.1:1"
+        plain = kad.KannakaAdapter(bin_path="kannaka-stub")
+        plain.open(d)
+        assert "KANNAKA_ENCODER" not in plain.env or plain.env["KANNAKA_ENCODER"] != "ollama"
+
+
 def test_kannaka_adapter_batch_and_fallback():
     items = [MemoryItem(id="s#0", text="alpha"), MemoryItem(id="s#1", text="beta")]
     with tempfile.TemporaryDirectory() as d:

@@ -35,7 +35,8 @@ One interface (`bench/adapters/base.py`): `ingest(items)`, `recall(query, k)`,
 
 | adapter | what it is | status |
 |---|---|---|
-| `kannaka` | the kannaka binary, one HRM store per run, `remember --observed` / `recall`, swarm publishing disabled | in |
+| `kannaka` | the kannaka binary as shipped (the default `hash:384` encoder), one HRM store per run, swarm publishing disabled | in |
+| `kannaka_minilm` | the same binary with `all-MiniLM-L6-v2` as its encoder (via ollama) — same encoder family as the vector baseline, so the comparison is about the medium | in |
 | `vector_numpy` | sentence-transformers `all-MiniLM-L6-v2` + cosine over numpy — the honest vector baseline | in |
 | `recency` | no retrieval: the k most recent items (the "plain context" floor for recall@k; full context in phase 2) | in |
 | `pgvector` | the same embeddings in Postgres/pgvector | next |

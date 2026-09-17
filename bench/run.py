@@ -23,6 +23,7 @@ from .adapters.base import Adapter
 
 ADAPTERS = {
     "kannaka": "bench.adapters.kannaka:KannakaAdapter",
+    "kannaka_minilm": "bench.adapters.kannaka:KannakaMinilmAdapter",
     "vector_numpy": "bench.adapters.baselines:VectorNumpyAdapter",
     "recency": "bench.adapters.baselines:RecencyAdapter",
 }
