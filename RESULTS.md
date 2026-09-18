@@ -324,3 +324,30 @@ grows linearly with what is already in the store, so a store costs O(n²) — at
 over the same items: 3–17 ms/item ingest and 15 ms recall, flat. This is the loss that keeps
 LongMemEval-M and ConvoMem beyond context ~20 off the table today; the kannaka rows on ConvoMem
 below are run with `--max-items 1500`, and every skipped store is an explicit row.
+
+## 2026-09-18 — ConvoMem (Salesforce, CC-BY-NC-4.0), context 20, five questions per category, k=15
+
+`--dataset convomem --convomem-context 20 --limit 5 --k 15`; session-level gold = the evidence
+conversation ids; abstention questions carry no gold and are unscored (the answer stage will score
+the refusal). Runs `convomem-c20-5percat-vector` and `convomem-c20-5percat-kannaka` (the latter
+with `--max-items 1500`: three assistant-facts stores of 5 192 turns each are explicit skip rows,
+kannaka-memory #978). Comparison over the 22 questions both adapters scored:
+
+| adapter (k=15) | hit@15 | recall@15 | MRR | recall p50 ms | ingest ms/item |
+|---|---|---|---|---|---|
+| kannaka_minilm (medium) | **1.000** | **0.871** | 0.865 | 7 024 | 455 |
+| vector_numpy (MiniLM cosine) | **1.000** | 0.848 | 0.865 | **15** | **3** |
+| recency (all 25 scored) | 0.200 | 0.053 | 0.166 | 0 | 0 |
+
+recall@15 by type (kannaka / cosine): assistant_facts 0.92 / 0.92 (n=2), changing 0.93 / 0.93,
+implicit_connection 0.73 / 0.73, preference **1.00 / 0.90**, user 0.80 / 0.80.
+
+Reading it:
+- Every scored question has its gold conversation in the top 15 for both. On the multi-evidence
+  categories the medium recovers one more gold conversation than exact cosine (preference), the
+  first place in any table where it edges cosine on the same embeddings — one question in
+  twenty-two, so a hint, not a result.
+- The cost side is unchanged: 470× the recall latency and 150× the ingest cost per item, and three
+  stores it could not ingest at all inside the cap. The scaling section above is the reason.
+- Next on ConvoMem: the answer pass at the standard setting (accuracy plus how the abstention
+  questions are refused), and larger contexts once #978 lands.
