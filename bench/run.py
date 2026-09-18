@@ -69,7 +69,7 @@ def session_cap(hits, k: int, cap: int, level: str):
 
 
 def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: str, rows: list, ds: str,
-              cap: int = 0):
+              cap: int = 0, consolidate: bool = False):
     """One store: ingest all items once, then ask every question against it.
     With a session cap the adapter is asked for k*3 candidates and the cap
     picks the k that go into the row (the row records both)."""
@@ -77,6 +77,7 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
     adapter.open(run_dir)
     t0 = time.perf_counter()
     adapter.ingest(items)
+    cons = adapter.consolidate() if consolidate else {}
     ingest_ms = (time.perf_counter() - t0) * 1000.0
     per_item = ingest_ms / max(1, len(items))
     footprint = adapter.footprint_bytes()
@@ -103,6 +104,7 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
             "candidates": candidates,
             "hits": ids, "any_hit_at_k": metrics.any_hit_at_k(ids, q.gold_ids, level, k),
             "evidence_turns": len(evidence), "evidence_coverage_at_k": ev_cov,
+            "consolidate": cons, "dream_hits_at_k": sum(1 for h in ids[:k] if h.startswith("kannaka:")),
             "recall_at_k": metrics.recall_at_k(ids, q.gold_ids, level, k),
             "mrr": metrics.mrr(ids, q.gold_ids, level),
             "recall_ms": round(ms, 2), "ingest_ms_per_item": round(per_item, 3),
@@ -125,6 +127,8 @@ def main(argv=None):
                     help="LongMemEval: questions PER question type (stratified); LoCoMo: questions per conversation")
     ap.add_argument("--out", default="results")
     ap.add_argument("--name", default=None)
+    ap.add_argument("--consolidate", action="store_true",
+                    help="run each adapter's consolidation step (kannaka: a dream cycle) after ingest, before recall")
     ap.add_argument("--max-items", type=int, default=0,
                     help="stores with more items than this are skipped (error row) for --max-items-adapters; 0 = no cap")
     ap.add_argument("--max-items-adapters", default="kannaka,kannaka_minilm",
@@ -156,7 +160,7 @@ def main(argv=None):
     manifest = {
         "run_id": run_id, "started_at": datetime.now(timezone.utc).isoformat(), "commit": git_commit(),
         "dataset": dsmeta, "adapters": names, "k": a.k, "session_cap": a.session_cap, "limit": a.limit,
-        "max_items": a.max_items,
+        "max_items": a.max_items, "consolidate": a.consolidate,
         "host": platform.node(), "platform": platform.platform(), "python": sys.version.split()[0],
         "cpu_count": os.cpu_count(), "stores": len(stores),
         "adapter_versions": {},
@@ -186,7 +190,8 @@ def main(argv=None):
                 continue
             run_dir = os.path.join(work, sid)
             try:
-                run_store(ad, run_dir, items, questions, a.k, level, rows, a.dataset, cap=a.session_cap)
+                run_store(ad, run_dir, items, questions, a.k, level, rows, a.dataset, cap=a.session_cap,
+                          consolidate=a.consolidate)
                 if n == "kannaka" and getattr(ad, "version", None):
                     manifest["adapter_versions"]["kannaka"] = ad.version
             except Exception as e:

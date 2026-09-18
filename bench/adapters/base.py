@@ -38,6 +38,12 @@ class Adapter:
     def ingest(self, items: Iterable[MemoryItem]) -> None:
         raise NotImplementedError
 
+    def consolidate(self) -> dict:
+        """Optional: run the system's offline consolidation after ingest and
+        before any recall (kannaka: a dream cycle). Returns what it did, for
+        the row; {} when the system has no such step."""
+        return {}
+
     def recall(self, query: str, k: int, when: datetime | None = None) -> list[RecallHit]:
         raise NotImplementedError
 

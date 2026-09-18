@@ -13,7 +13,9 @@ first probe, 2026-09-17). Shipped defaults otherwise.
 from __future__ import annotations
 
 import json
+import re
 import os
+import time
 import subprocess
 from datetime import timezone
 from typing import Iterable
@@ -168,6 +170,32 @@ class KannakaAdapter(Adapter):
                                           text=(r.get("content") or "")[:200]))
                 break
         return hits[:k]
+
+    def _memory_count(self):
+        out = self._run(["status"])
+        m = re.search(r'"total_memories":\s*(\d+)', out or "")
+        return int(m.group(1)) if m else None
+
+    def consolidate(self) -> dict:
+        """One dream cycle over the freshly ingested store (`kannaka dream
+        --mode deep`, BENCH_DREAM_MODE=lite for the quick pass,
+        BENCH_DREAM_CHIRAL=<eta> for spiral dynamics). The paper's central
+        claim — a memory that joins evidence before the question — lives here;
+        the row records the cost (ms, memories minted) beside whatever it did
+        to recall."""
+        mode = os.environ.get("BENCH_DREAM_MODE", "deep")
+        args = ["dream", "--mode", mode]
+        chiral = os.environ.get("BENCH_DREAM_CHIRAL")
+        if chiral:
+            args += ["--chiral", chiral]
+        before = self._memory_count()
+        t0 = time.perf_counter()
+        rc, out, err = self._batch_run(args, max(self.timeout_s, 1800.0))
+        ms = (time.perf_counter() - t0) * 1000.0
+        after = self._memory_count()
+        return {"mode": mode, "chiral": chiral, "ms": round(ms), "rc": rc, "memories_before": before,
+                "memories_after": after, "minted": (after - before) if (before is not None and after is not None) else None,
+                "note": (err or "")[-200:] if rc != 0 else ""}
 
     def footprint_bytes(self) -> int:
         return dir_bytes(self.dir) if self.dir else 0
