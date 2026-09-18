@@ -375,3 +375,36 @@ different answer length). Reading it:
 - Next: a turn-level "all evidence turns covered" column (the diagnostic already shows *any*
   evidence turn present in 4–5 of 5), and the aggregation story that a consolidating memory has to
   tell here.
+
+## 2026-09-18 — Evidence coverage: are the turns the answer is built from in the top-k?
+
+`evid@k` (run.py `1cb0c2e`; `python -m bench.evidence_coverage <run>` for older runs): of a
+question's answer-bearing turns inside its gold sessions (`has_answer`), the fraction found in the
+top-k; `all` = questions where every such turn is there. Session-level hit@k answers "is a gold
+conversation present"; this answers "is the evidence present". k=15 throughout.
+
+| run | adapter | evidence turns / q | evid@15 | all-evidence@15 |
+|---|---|---|---|---|
+| longmemeval_s (30 q) | **kannaka_minilm** | 2.0 | **0.848** | **0.767** |
+| longmemeval_s | vector_numpy | 2.0 | 0.809 | 0.700 |
+| longmemeval_s | supermemory (documents) | 2.0 | 0.657 | 0.517 |
+| longmemeval_s | recency | 2.0 | 0.097 | 0.067 |
+| ConvoMem c20 (23 q with matched evidence) | kannaka_minilm (20 q) | 3.9 | 0.443 | 0.150 |
+| ConvoMem c20 | vector_numpy | 4.1 | 0.400 | 0.130 |
+
+By type, longmemeval_s, kannaka / cosine (coverage): multi-session **0.59 / 0.49**, preference
+**0.80 / 0.67**, single-session-user 0.90 / 0.90, temporal 0.80 / 0.80, knowledge-update and
+single-session-assistant 1.00 / 1.00.
+
+Reading it:
+- **At the turn level the medium is ahead of exact cosine on the same embeddings**: +0.04 coverage
+  overall, +0.10 on multi-session and +0.13 on preference, with all-evidence 0.767 vs 0.700. This
+  is the first table where the medium's ranking, not just its session hit, beats the dot product —
+  and it is exactly the multi-evidence questions. Final accuracy still ties (0.733 both) because the
+  answer model does not always use what it is given; the retrieval edge is real and small.
+- **Supermemory's chunk retrieval is well behind on evidence (0.657 / 0.517)**: its chunks land in
+  the right conversation more often than they land on the right turn.
+- **ConvoMem is the hard case in numbers:** four evidence turns per question, and the top-15 holds
+  all of them for only 13–15 % of questions. That, not the answer stage, is why user / changing /
+  assistant_facts accuracy sits at 0–2 of 5. Aggregation needs either a much wider window or a
+  memory that has already joined the evidence before the question arrives.
