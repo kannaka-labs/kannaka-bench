@@ -176,6 +176,8 @@ def main(argv=None):
     ap.add_argument("--full-context", default="", help="adapter name(s) whose answer sees the WHOLE history instead of hits")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--tag", default="", help="write answers-<tag>.jsonl instead of answers.jsonl")
+    ap.add_argument("--max-answer-tokens", type=int, default=600,
+                    help="answer model output cap (ConvoMem gold answers are multi-item lists; 200 cut them off mid-list)")
     ap.add_argument("--per-session", type=int, default=1,
                     help="turns per hit session shown to the model, filled from the row's candidates (default 1)")
     ap.add_argument("--max-excerpts", type=int, default=40, help="cap on excerpts before pair expansion")
@@ -230,7 +232,7 @@ def main(argv=None):
         system = ANSWER_SYS_PREFERENCE if "preference" in (r.get("qtype") or "") else ANSWER_SYS
         t0 = time.perf_counter()
         try:
-            answer, au = chat(url, key, answer_model, system, user, max_tokens=200)
+            answer, au = chat(url, key, answer_model, system, user, max_tokens=a.max_answer_tokens)
             ans_ms = (time.perf_counter() - t0) * 1000
             verdict, ju = chat(url, key, judge_model, JUDGE_SYS,
                                f"Question: {q.question}\nReference answer: {q.answer}\nAnswer to grade: {answer}\n\nOne word: CORRECT or INCORRECT.",
@@ -250,7 +252,7 @@ def main(argv=None):
         correct = verdict.strip().upper().startswith("CORRECT")
         row = {"adapter": r["adapter"], "question_id": r["question_id"], "qtype": r["qtype"], "mode": mode,
                "n_excerpts": len(ctx_items), "excerpt_cap": EXCERPT_CHAR_CAP, "pair_turns": PAIR_TURNS,
-               "per_session": a.per_session, "max_excerpts": a.max_excerpts,
+               "per_session": a.per_session, "max_excerpts": a.max_excerpts, "max_answer_tokens": a.max_answer_tokens,
                "hit_at_k": r["any_hit_at_k"], "answer": answer, "gold": q.answer, "verdict": verdict, "correct": correct,
                "answer_model": answer_model, "judge_model": judge_model, "answer_ms": round(ans_ms),
                "tokens": {"answer": au, "judge": ju}}
