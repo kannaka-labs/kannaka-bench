@@ -441,3 +441,28 @@ Reading it:
   behaviour seen on MiniLM; cost columns are as before (100× recall latency, 8× ingest).
 - Supermemory's default encoder does not explain its retrieval gap: on the same weights the
   chunk index is at 0.897 / 0.822 while both turn-level systems are at ≥ 0.967 / 0.942.
+
+## 2026-09-18 — bge-base at n=60 (`longmemeval_s`, ten questions per type, k=15)
+
+Run `s-10pertype-k15-bge` (seeded with the 30-question rows via `--resume`; the 30 new questions
+ingested fresh). Same setting as the 30-question bge table.
+
+| adapter (bge-base, k=15) | n | hit@15 | recall@15 | evid@15 | all-evidence | MRR | recall p50 ms | accuracy |
+|---|---|---|---|---|---|---|---|---|
+| kannaka_bge | 60 | 0.983 | 0.960 | **0.859** | **0.783** | 0.939 | 3 081 | **0.800** |
+| vector_bge | 60 | **1.000** | **0.969** | 0.852 | 0.767 | **0.940** | **32** | 0.783 |
+
+Accuracy by type (kannaka / cosine, n=10): knowledge-update 9 / 9, multi-session **5 / 4**,
+single-session-assistant 10 / 10, preference **9 / 8**, single-session-user **8 / 9**, temporal 7 / 7.
+
+Reading it:
+- **Doubling n shrank the accuracy gap from +0.067 to +0.017** (one question in sixty): the
+  30-question edge was mostly noise, as flagged. The honest summary of the medium against exact
+  cosine on the same strong encoder is **parity on accuracy (0.80 vs 0.78), a whisker ahead on
+  turn-level evidence (0.859 vs 0.852), a whisker behind on session hit (0.983 vs 1.000), and 100×
+  the recall latency**.
+- **Multi-session is the open loss for both at n=10** (5 / 4 of 10) with all-evidence 0.50: half
+  of those questions do not have all their evidence turns in the top-15 for either system. Widening
+  k does not fix it (the cap ablation above); consolidation is the untested route.
+- Retrieval at the session level is saturated on LongMemEval-S; the paper's LongMemEval story is
+  the encoder (0.53 → 0.93 → 0.98) and the answer stage (0.47 → 0.63 → 0.73 → 0.80), not the index.
