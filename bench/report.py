@@ -42,6 +42,8 @@ def summarize(rows: list[dict]) -> dict:
             "any_hit_at_k": sum(1 for r in scored if r["any_hit_at_k"]) / len(scored),
             "recall_at_k": sum(r["recall_at_k"] for r in scored) / len(scored),
             "mrr": sum(r["mrr"] for r in scored) / len(scored),
+            "evidence_coverage_at_k": (lambda ev: (sum(ev) / len(ev)) if ev else float("nan"))(
+                [r["evidence_coverage_at_k"] for r in scored if r.get("evidence_coverage_at_k") is not None]),
             "recall_p50_ms": metrics.percentile([r["recall_ms"] for r in ok], 0.5),
             "recall_p95_ms": metrics.percentile([r["recall_ms"] for r in ok], 0.95),
             "ingest_ms_per_item": sum(r["ingest_ms_per_item"] for r in ok) / len(ok),
@@ -66,7 +68,7 @@ def render(run_dir: str) -> str:
         f"## {manifest.get('run_id')} — {ds.get('dataset')} (sha256 {str(ds.get('sha256', ''))[:12]}…), k={manifest.get('k')}, "
         f"{manifest.get('stores')} stores, host {manifest.get('host')}, commit {str(manifest.get('commit', ''))[:8]}",
         "",
-        "| adapter | n | hit@k | recall@k | MRR | recall p50 ms | p95 ms | ingest ms/item | bytes/item | errors |",
+        "| adapter | n | hit@k | recall@k | evid@k | MRR | recall p50 ms | p95 ms | ingest ms/item | bytes/item | errors |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     best = max((v.get("any_hit_at_k", -1) for v in s.values()), default=-1)
@@ -75,7 +77,7 @@ def render(run_dir: str) -> str:
             lines.append(f"| {name} | 0 | — | — | — | — | — | — | — | {v.get('errors', 0)} |")
             continue
         mark = " ◀" if v["any_hit_at_k"] == best and len(s) > 1 else ""
-        lines.append(f"| {name}{mark} | {v['n']} | {v['any_hit_at_k']:.3f} | {v['recall_at_k']:.3f} | {v['mrr']:.3f} | "
+        lines.append(f"| {name}{mark} | {v['n']} | {v['any_hit_at_k']:.3f} | {v['recall_at_k']:.3f} | {v.get('evidence_coverage_at_k', float('nan')):.3f} | {v['mrr']:.3f} | "
                      f"{v['recall_p50_ms']:.0f} | {v['recall_p95_ms']:.0f} | {v['ingest_ms_per_item']:.1f} | "
                      f"{v['footprint_bytes_per_item']:.0f} | {v['errors']} |")
     types = sorted({t for v in s.values() for t in v.get("by_qtype", {})})

@@ -86,15 +86,21 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
         timed_hits = [(h, per_q_ms) for h in all_hits]
     else:
         timed_hits = [Adapter.timed(adapter.recall, q.question, k_fetch, q.asked_at) for q in questions]
+    evidence_all = {it.id for it in items if (it.meta or {}).get("has_answer")}
     for q, (hits, ms) in zip(questions, timed_hits):
         candidates = [h.id for h in hits]          # everything the adapter returned, rank order
         hits = session_cap(hits, k, cap, level)
         ids = [h.id for h in hits]
+        # answer-bearing turns of THIS question's gold sessions (LongMemEval marks
+        # has_answer per turn; ConvoMem's evidence messages are matched by text)
+        evidence = {e for e in evidence_all if (e.rpartition("#")[0] if "#" in e else e) in q.gold_ids} if q.gold_ids else set()
+        ev_cov = (len(set(ids[:k]) & evidence) / len(evidence)) if evidence else None
         rows.append({
             "dataset": ds, "adapter": adapter.name, "question_id": q.id, "qtype": q.qtype,
             "k": k, "session_cap": cap, "k_fetch": k_fetch, "n_items": len(items), "gold": sorted(q.gold_ids), "gold_level": level,
             "candidates": candidates,
             "hits": ids, "any_hit_at_k": metrics.any_hit_at_k(ids, q.gold_ids, level, k),
+            "evidence_turns": len(evidence), "evidence_coverage_at_k": ev_cov,
             "recall_at_k": metrics.recall_at_k(ids, q.gold_ids, level, k),
             "mrr": metrics.mrr(ids, q.gold_ids, level),
             "recall_ms": round(ms, 2), "ingest_ms_per_item": round(per_item, 3),
