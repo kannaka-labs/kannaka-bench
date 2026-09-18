@@ -117,6 +117,10 @@ def main(argv=None):
                     help="LongMemEval: questions PER question type (stratified); LoCoMo: questions per conversation")
     ap.add_argument("--out", default="results")
     ap.add_argument("--name", default=None)
+    ap.add_argument("--max-items", type=int, default=0,
+                    help="stores with more items than this are skipped (error row) for --max-items-adapters; 0 = no cap")
+    ap.add_argument("--max-items-adapters", default="kannaka,kannaka_minilm",
+                    help="comma list of adapters the --max-items cap applies to")
     ap.add_argument("--resume", action="store_true",
                     help="keep the run dir's existing non-error rows and skip those (adapter, question) pairs")
     a = ap.parse_args(argv)
@@ -144,6 +148,7 @@ def main(argv=None):
     manifest = {
         "run_id": run_id, "started_at": datetime.now(timezone.utc).isoformat(), "commit": git_commit(),
         "dataset": dsmeta, "adapters": names, "k": a.k, "session_cap": a.session_cap, "limit": a.limit,
+        "max_items": a.max_items,
         "host": platform.node(), "platform": platform.platform(), "python": sys.version.split()[0],
         "cpu_count": os.cpu_count(), "stores": len(stores),
         "adapter_versions": {},
@@ -163,6 +168,13 @@ def main(argv=None):
     for si, (sid, items, questions, level) in enumerate(stores):
         for n, ad in adapters.items():
             if finished and all((n, q.id) in finished for q in questions):
+                continue
+            if a.max_items and len(items) > a.max_items and n in set(a.max_items_adapters.split(",")):
+                for q in questions:
+                    rows.append({"dataset": a.dataset, "adapter": n, "question_id": q.id, "qtype": q.qtype,
+                                 "n_items": len(items),
+                                 "error": f"skipped: n_items {len(items)} > max_items {a.max_items} (kannaka-memory #978)"})
+                print(f"[{sid}] {n}: SKIPPED {len(items)} items > --max-items {a.max_items}", flush=True)
                 continue
             run_dir = os.path.join(work, sid)
             try:
