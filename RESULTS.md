@@ -408,3 +408,36 @@ Reading it:
   all of them for only 13–15 % of questions. That, not the answer stage, is why user / changing /
   assistant_facts accuracy sits at 0–2 of 5. Aggregation needs either a much wider window or a
   memory that has already joined the evidence before the question arrives.
+
+## 2026-09-18 — Encoder row: bge-base-en-v1.5 (`longmemeval_s`, same 30 questions, k=15)
+
+`vector_bge` and `kannaka_bge` (`a2d3454`) over BAAI/bge-base-en-v1.5 (768-d, Supermemory's
+default encoder) through the bench embed server (126 ms/call on debain2), same weights for both;
+answer stage v2 standard setting. Run `s-5pertype-k15-bge`.
+
+| encoder → adapter | hit@15 | recall@15 | evid@15 | MRR | recall p50 ms | ingest ms/item | accuracy | prompt tok/q |
+|---|---|---|---|---|---|---|---|---|
+| MiniLM → kannaka_minilm | 1.000 | 0.950 | 0.848 | 0.918 | 2 686 | 370 | 0.733 | 5 471 |
+| MiniLM → vector_numpy | 1.000 | 0.950 | 0.809 | 0.921 | 14 | 14 | 0.733 | 5 422 |
+| **bge-base → kannaka_bge** | 0.967 | 0.942 | 0.816 | 0.950 | 3 063 | 792 | **0.833** | 5 886 |
+| **bge-base → vector_bge** | **1.000** | **0.950** | 0.816 | **0.952** | **31** | 99 | 0.767 | 5 926 |
+| MiniLM → supermemory (documents) | 0.897 | 0.822 | 0.657 | 0.874 | 134 | 786 | 0.621 | 3 193 |
+
+Accuracy by type (bge, kannaka / cosine, n=5): knowledge-update 4 / 4, multi-session **3 / 2**,
+single-session-assistant 5 / 5, preference **5 / 4**, single-session-user 4 / 4, temporal 4 / 4.
+
+Reading it:
+- **The stronger encoder lifts final accuracy for both** (0.733 → 0.767 cosine, 0.733 → 0.833
+  medium) and MRR (0.92 → 0.95). Retrieval at the session level is saturated on this set (hit@15
+  1.000 / 0.967); the gains are in rank and in what the answer model gets.
+- **0.833 is the best accuracy in any table here**, on the medium; the two questions it wins over
+  cosine are one multi-session and one preference, with *identical* evidence coverage (0.816 for
+  both) — so this is rank order inside the window plus answer-model variance, not more evidence.
+  Two questions in thirty is inside the noise of a 30-question set; it is reported, not claimed.
+- The medium's turn-level edge from the MiniLM table (0.848 vs 0.809) does not reappear with
+  bge-base (0.816 / 0.816): whatever the medium adds to a weak encoder's ranking, a strong encoder
+  already has.
+- The one session miss for kannaka_bge (multi-session, 0.80) is the trade for the same medium
+  behaviour seen on MiniLM; cost columns are as before (100× recall latency, 8× ingest).
+- Supermemory's default encoder does not explain its retrieval gap: on the same weights the
+  chunk index is at 0.897 / 0.822 while both turn-level systems are at ≥ 0.967 / 0.942.
