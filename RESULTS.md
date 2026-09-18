@@ -283,7 +283,9 @@ separately. Answer stage v2, standard setting. Run `s-5pertype-k15-supermemory2`
 Supermemory by type (hit / recall / accuracy, n=5 unless noted): knowledge-update 0.80 / 0.70 / 0.40;
 multi-session 0.80 / 0.68 / 0.20; single-session-assistant 1.00 / 1.00 / 1.00 (n=4); preference
 0.80 / 0.80 / 0.80; single-session-user 1.00 / 1.00 / 0.80; temporal 1.00 / 0.78 / 0.60.
-n=29: one question (`e9327a54`) is still pending a server restart — see the caveats.
+n=29 of 30: question `4c36ccef` (single-session-assistant) is an **error row** — its store never finished
+ingesting (35 of 521 documents stuck in the server's queue after three fresh restarts and a 15-minute
+drain), so it is neither a hit nor a miss; the table is over the 29 that completed.
 
 Reading it:
 - On this set, at the same k and the same embeddings, **their chunk retrieval finds the gold session
