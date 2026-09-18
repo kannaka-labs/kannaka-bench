@@ -91,3 +91,10 @@ class VectorNumpyAdapter(Adapter):
 
     def footprint_bytes(self) -> int:
         return dir_bytes(self.dir) if self.dir else 0
+
+
+class VectorBgeAdapter(VectorNumpyAdapter):
+    """Exact cosine over BAAI/bge-base-en-v1.5 (768-d) — the encoder row that
+    pairs with `kannaka_bge`; same weights, in-process."""
+    name = "vector_bge"
+    MODEL = "BAAI/bge-base-en-v1.5"

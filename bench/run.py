@@ -26,6 +26,8 @@ ADAPTERS = {
     "kannaka_minilm": "bench.adapters.kannaka:KannakaMinilmAdapter",
     "vector_numpy": "bench.adapters.baselines:VectorNumpyAdapter",
     "recency": "bench.adapters.baselines:RecencyAdapter",
+    "kannaka_bge": "bench.adapters.kannaka:KannakaBgeAdapter",
+    "vector_bge": "bench.adapters.baselines:VectorBgeAdapter",
     "supermemory": "bench.adapters.supermemory:SupermemoryAdapter",
     "supermemory_mem": "bench.adapters.supermemory:SupermemoryMemAdapter",
 }

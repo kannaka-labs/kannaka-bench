@@ -194,3 +194,20 @@ class KannakaMinilmAdapter(KannakaAdapter):
             "KANNAKA_ENCODER_MODEL": os.environ.get("BENCH_OLLAMA_EMBED_MODEL", "all-minilm"),
             "KANNAKA_ENCODER_DIM": "384",
         })
+
+
+class KannakaBgeAdapter(KannakaMinilmAdapter):
+    """kannaka with BAAI/bge-base-en-v1.5 (768-d) through the bench embed server
+    (`python -m bench.embed_server --port 11439` with
+    BENCH_EMBED_MODEL=BAAI/bge-base-en-v1.5) — Supermemory's default encoder,
+    paired with `vector_bge` on the same weights. BENCH_BGE_URL overrides."""
+    name = "kannaka_bge"
+
+    def open(self, run_dir: str) -> None:
+        super().open(run_dir)
+        self.env.update({
+            "KANNAKA_ENCODER": "ollama",
+            "KANNAKA_ENCODER_URL": os.environ.get("BENCH_BGE_URL", "http://127.0.0.1:11439"),
+            "KANNAKA_ENCODER_MODEL": "bge-base-en-v1.5",
+            "KANNAKA_ENCODER_DIM": "768",
+        })
