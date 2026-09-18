@@ -263,3 +263,41 @@ cost accuracy, not just tokens. Session diversity buys two multi-session answers
 elsewhere. k=15, no cap, turn pairs stays the standard setting. Multi-session (counting across
 3+ sessions) remains the open loss for every system on this set — an aggregation problem the
 answer stage cannot fix by widening, which is the case for a memory that consolidates.
+
+## 2026-09-17 — Supermemory, head to head (`longmemeval_s`, same 30 questions, k=15)
+
+`github.com/supermemoryai/supermemory` (MIT), self-hosted `supermemory-server` on debain2, adapter
+`bench/adapters/supermemory.py`, **retrieval-only row**: `taskType=superrag` ingest, `searchMode=documents`
+search, embeddings through the same MiniLM weights as every other row (their server → our embed
+server's OpenAI-shaped endpoint). Their memory engine (`supermemory_mem`: LLM fact extraction,
+`memories` search) is not in this table — it needs a real LLM per document and is run and costed
+separately. Answer stage v2, standard setting. Run `s-5pertype-k15-supermemory2`.
+
+| adapter (k=15) | hit@15 | recall@15 | MRR | recall p50 ms | ingest ms/item | answer accuracy | prompt tok/q |
+|---|---|---|---|---|---|---|---|
+| kannaka_minilm (medium) | **1.000** | **0.950** | 0.918 | 2 686 | 370 | **0.733** | 5 471 |
+| vector_numpy (MiniLM cosine) | **1.000** | **0.950** | **0.921** | **14** | **14** | **0.733** | 5 422 |
+| supermemory (documents mode) | 0.897 | 0.822 | 0.874 | 134 | 786 | 0.621 | 3 193 |
+| recency | 0.167 | 0.125 | 0.106 | 0 | 0 | — | — |
+
+Supermemory by type (hit / recall / accuracy, n=5 unless noted): knowledge-update 0.80 / 0.70 / 0.40;
+multi-session 0.80 / 0.68 / 0.20; single-session-assistant 1.00 / 1.00 / 1.00 (n=4); preference
+0.80 / 0.80 / 0.80; single-session-user 1.00 / 1.00 / 0.80; temporal 1.00 / 0.78 / 0.60.
+n=29: one question (`e9327a54`) is still pending a server restart — see the caveats.
+
+Reading it:
+- On this set, at the same k and the same embeddings, **their chunk retrieval finds the gold session
+  less often than plain cosine over turns (0.897 vs 1.000)** and the answer model is right less often
+  (0.621 vs 0.733). Their headline "95% Recall@15" is not reproduced here for the retrieval-only path;
+  whether their number comes from the extraction layer, a different embedding (bge-base by default),
+  or a different subset is not published.
+- Their search is fast (134 ms p50, 20× faster than kannaka's spawn-per-recall path) and their
+  prompts are smaller (3.2k tokens: chunks, not turn pairs); their ingest is the slowest of the
+  table (786 ms/item through their async pipeline).
+- **Operational findings, all reproducible:** the server calls an LLM for every document even in
+  chunk-only mode (`bench/llm_stub.py` answers those instantly for this row); "Self-hosted lite is
+  licensed for up to 10,000 documents" (HTTP 403 after 19 stores — the adapter now deletes a store
+  on close); its ingest queue paused at the default 1 GB ingest-memory limit (raised to 8 GB); and it
+  slowed from ~3 to ~30 min per 500-turn store over the run with internal KV-persistence errors,
+  needing two fresh restarts. None of that is a knock on the algorithm; all of it is what a
+  self-hoster meets.
