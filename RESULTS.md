@@ -303,3 +303,24 @@ Reading it:
   slowed from ~3 to ~30 min per 500-turn store over the run with internal KV-persistence errors,
   needing two fresh restarts. None of that is a knock on the algorithm; all of it is what a
   self-hoster meets.
+
+## 2026-09-18 — Scaling: kannaka ingest and recall cost vs store size (kannaka-memory #978)
+
+Fourteen ConvoMem context-20 stores, `kannaka_minilm` with `remember --batch` (bulk mode, #974) and
+the in-process MiniLM embed server (74 ms/call, so embedding is not the cost), debain2:
+
+| items in store | ingest ms/item | whole-store ingest | recall p50 ms |
+|---|---|---|---|
+| 241 | 136 | 33 s | 1 317 |
+| 436 | 241 | 105 s | 2 657 |
+| 652 | 398 | 4.3 min | 3 655 |
+| 811 | 533 | 7.2 min | 5 867 |
+| 958 | 695 | 11.1 min | 11 488 |
+| 5 192 | — | **not finished after 2 h 8 min** (killed) | — |
+
+Least squares over the fourteen: **ingest ms/item ≈ −50 + 0.78·n**, i.e. the cost of one insert
+grows linearly with what is already in the store, so a store costs O(n²) — at 5 000 items that is
+~8 h; **recall ms ≈ −2 300 + 14·n** (the per-recall save path, #977, on top of the spawn). Cosine
+over the same items: 3–17 ms/item ingest and 15 ms recall, flat. This is the loss that keeps
+LongMemEval-M and ConvoMem beyond context ~20 off the table today; the kannaka rows on ConvoMem
+below are run with `--max-items 1500`, and every skipped store is an explicit row.
