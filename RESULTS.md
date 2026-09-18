@@ -351,3 +351,27 @@ Reading it:
   stores it could not ingest at all inside the cap. The scaling section above is the reason.
 - Next on ConvoMem: the answer pass at the standard setting (accuracy plus how the abstention
   questions are refused), and larger contexts once #978 lands.
+
+**ConvoMem c20 answer accuracy** (answer stage v2 standard setting; `answers-v3` = 600-token answer
+cap, `answers-v2` = the old 200; the cap turned out not to be the loss — outputs averaged 150–190
+tokens either way):
+
+| adapter | n | accuracy (v2 → v3) | abstention | assistant_facts | changing | implicit | preference | user | prompt tok/q |
+|---|---|---|---|---|---|---|---|---|---|
+| vector_numpy | 30 | 0.567 → 0.533 | 5/5 | 0/5 | 2/5 | 4/5 → 3/5 | 4/5 | 2/5 | 1 196 |
+| kannaka_minilm | 27 (+3 skipped) | 0.593 → 0.630 | 5/5 | 0/2 | 2/5 | 3/5 → 4/5 | 4/5 | 2/5 | 1 229 |
+
+The one-question swings between v2 and v3 are judge noise on the same excerpts (temperature 0,
+different answer length). Reading it:
+- **Both systems refuse every abstention question correctly** (5/5, "I don't know" with the reason).
+- **The loss is multi-evidence coverage, not the cap and not the store.** ConvoMem's user /
+  changing / assistant_facts gold answers are lists assembled from 2–6 evidence turns spread over
+  several conversations ("six key items…", six books' prices, three meetings). Session-level
+  retrieval finds *a* gold conversation every time, but the top-15 turns hold only some of the
+  evidence turns, the model answers with the part it has ("I can identify four of the six…"), and
+  the strict judge marks the partial list wrong — including one answer whose computed averages
+  matched the gold exactly but listed two misses instead of three. Same shape as LongMemEval's
+  multi-session loss, in a dataset built around it.
+- Next: a turn-level "all evidence turns covered" column (the diagnostic already shows *any*
+  evidence turn present in 4–5 of 5), and the aggregation story that a consolidating memory has to
+  tell here.
