@@ -318,9 +318,9 @@ the in-process MiniLM embed server (74 ms/call, so embedding is not the cost), d
 | 958 | 695 | 11.1 min | 11 488 |
 | 5 192 | — | **not finished after 2 h 8 min** (killed) | — |
 
-Least squares over the fourteen: **ingest ms/item ≈ −50 + 0.78·n**, i.e. the cost of one insert
+Least squares over the fourteen: **ingest ms/item ≈ −74 + 0.77·n**, i.e. the cost of one insert
 grows linearly with what is already in the store, so a store costs O(n²) — at 5 000 items that is
-~8 h; **recall ms ≈ −2 300 + 14·n** (the per-recall save path, #977, on top of the spawn). Cosine
+~5.5 h; **recall ms ≈ −2 060 + 11.7·n** (the per-recall save path, #977, on top of the spawn). Cosine
 over the same items: 3–17 ms/item ingest and 15 ms recall, flat. This is the loss that keeps
 LongMemEval-M and ConvoMem beyond context ~20 off the table today; the kannaka rows on ConvoMem
 below are run with `--max-items 1500`, and every skipped store is an explicit row.
