@@ -466,3 +466,39 @@ Reading it:
   k does not fix it (the cap ablation above); consolidation is the untested route.
 - Retrieval at the session level is saturated on LongMemEval-S; the paper's LongMemEval story is
   the encoder (0.53 → 0.93 → 0.98) and the answer stage (0.47 → 0.63 → 0.73 → 0.80), not the index.
+
+## 2026-09-19 — The consolidation arm: does dreaming help? (`longmemeval_s`, 30 q, bge-base, k=15)
+
+The experiment the paper's central claim needs (`docs/paper-results-skeleton.md` §5): ingest the
+haystack, run **one deep dream cycle** (`kannaka dream --mode deep`, `run.py --consolidate`,
+`9743018`), then recall. Everything else identical to the bge row above. Run
+`s-5pertype-k15-bge-dream`.
+
+| kannaka_bge, k=15 | hit@15 | recall@15 | evid@15 | all-evidence | MRR | accuracy | recall p50 ms | ingest ms/item | bytes/item |
+|---|---|---|---|---|---|---|---|---|---|
+| no consolidation | 0.967 | 0.942 | 0.816 | 0.733 | **0.950** | 0.833 | 3 068 | **792** | **42 229** |
+| **+ one deep dream** | 0.967 | 0.942 | 0.816 | 0.733 | **0.529** | 0.833 | **1 344** | 1 109 | 55 624 |
+
+Dream cost: **141 s per store** (p50, ~500 turns), 9 memories minted per store, +32 % bytes.
+
+Reading it — this is a negative result, stated plainly:
+- **Consolidation changed nothing measurable about what is retrieved.** hit@15, recall@15, evidence
+  coverage, all-evidence and final accuracy are *identical* to the same run without it, question for
+  question (0.833 both; multi-session 4/5 vs 3/5 is one question).
+- **It damaged the ranking.** MRR fell 0.950 → 0.529 because a synthesized memory took **rank 1 in
+  24 of 30 questions** (48 dream rows inside the top-15 overall, 1.6 per question). Dreams cannot
+  be evidence — they are cross-cluster syntheses, not turns — so every one of them is a slot taken
+  from a turn that could be. The answer stage survived it here only because k=15 is wide enough to
+  carry the evidence anyway; at k=5 this would be a direct accuracy loss.
+- This is the **dream-attractor pathology already quantified on the live store** (kannaka-memory
+  #963: 183 dream rows held 75 % of the Gram mass and answered 4 of 5 unrelated probes). The bench
+  now reproduces it on a clean corpus in one cycle, with a number attached.
+- One unexplained win: **recall got 2.3× faster after dreaming** (3 068 → 1 344 ms p50). Worth a
+  look — if consolidation shrinks the working set that is the first cost-side result in its favour.
+
+What this does to the claim: *on this benchmark, one dream cycle does not join evidence for
+multi-evidence questions, and it costs 141 s, a third more bytes, and the top of the ranking.* The
+architecture's distinguishing mechanism is measured and, as it stands today, it does not pay for
+itself. The honest next questions are whether repeated cycles over a longer-lived store behave
+differently (every store here is one-shot), and whether dream rows should be excluded from recall
+by default (kannaka-memory #963 / a new issue).
