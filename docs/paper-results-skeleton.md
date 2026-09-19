@@ -54,7 +54,23 @@ claim the tables do not support; the losses are in the same list as the wins.
 - **No retrieval advantage from the medium itself** on a strong encoder. The interference medium
   is a faithful vector store here (the codebook projection is lossless, the recall path ≈ cosine).
 
-## 5. The claim the paper has to make or drop
+## 5. The claim the paper has to make or drop — **first measurement is negative (2026-09-19)**
+
+The consolidation arm now exists and has run (RESULTS.md, `s-5pertype-k15-bge-dream`). One deep
+dream cycle between ingest and recall left hit@15, recall@15, evidence coverage, all-evidence and
+final accuracy **identical** to the same run without it, cost 141 s per ~500-turn store and +32 %
+bytes, and put a synthesized memory at rank 1 in 24 of 30 questions (MRR 0.950 → 0.529). That is
+the paper's distinguishing mechanism, measured, not paying for itself on this benchmark. It also
+reproduces the dream-attractor pathology of kannaka-memory #963 on a clean corpus in a single
+cycle. One open thread in its favour: recall was 2.3× faster afterwards.
+
+The abstract this supports today: *a persistent-agent memory at parity with exact cosine on
+retrieval quality and answer accuracy, whose consolidation mechanism is measured and currently
+costs more than it returns.* What could still change it: repeated cycles over a long-lived store
+(every store here is one-shot, ingested and queried once), excluding dream rows from recall, or a
+consolidation that emits joins over evidence rather than cross-cluster syntheses.
+
+### Original framing (kept for the record)
 
 The architecture's stated advantage — a memory that consolidates ("dreams"), forgets on purpose,
 and joins evidence *before* the question — is exactly what would move the two open losses
