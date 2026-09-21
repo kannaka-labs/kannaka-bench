@@ -17,6 +17,7 @@ import re
 import os
 import time
 import subprocess
+import sys
 from datetime import timezone
 from typing import Iterable
 
@@ -92,6 +93,8 @@ class KannakaAdapter(Adapter):
         self.dir = os.path.join(run_dir, "kannaka")
         os.makedirs(self.dir, exist_ok=True)
         self.beam = {"recalls": 0, "scored": 0, "total": 0}
+        #: None = untested, True/False = this binary does/doesn't take `--at`.
+        self.supports_at = None
         self.env = dict(os.environ, KANNAKA_DATA_DIR=self.dir,
                         KANNAKA_NATS_URL="nats://127.0.0.1:1",   # off the swarm, always
                         KANNAKA_FACET_DECOMPOSE=os.environ.get("KANNAKA_FACET_DECOMPOSE", "1"))
@@ -163,13 +166,22 @@ class KannakaAdapter(Adapter):
             hits.append(RecallHit(id=iid, score=float(r.get("similarity") or 0.0), text=(r.get("content") or "")[:200]))
         return hits[:k]
 
-    def recall_many(self, queries: list[str], k: int) -> list[list[RecallHit]]:
-        """Many queries, one process (recall --batch); falls back to one spawn each."""
+    def recall_many(self, queries: list[str], k: int, whens=None) -> list[list[RecallHit]]:
+        """Many queries, one process (recall --batch); falls back to one spawn each.
+
+        `at` goes per ROW, not per process: each question has its own date, and
+        one flag for the whole file could not express that.
+        """
+        whens = list(whens) if whens is not None else [None] * len(queries)
         if self.batch != "0" and self.batch_ok is not False:
             path = os.path.join(self.dir, "queries.ndjson")
             with open(path, "w", encoding="utf-8") as f:
-                for q in queries:
-                    f.write(json.dumps({"query": q[:1000], "top_k": k}, ensure_ascii=False) + "\n")
+                for q, w in zip(queries, whens):
+                    row = {"query": q[:1000], "top_k": k}
+                    at = self._at_args(w)
+                    if at:
+                        row["at"] = at[1]
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
             rc, stdout, err = self._batch_run(["recall", "--batch", path], max(self.timeout_s, 1.0 * len(queries) + 60))
             if not ("unknown flag" in err and "--batch" in err) and rc == 0:
                 out = []
@@ -184,10 +196,51 @@ class KannakaAdapter(Adapter):
                     self.batch_ok = True
                     return out
             self.batch_ok = False
-        return [self.recall(q, k) for q in queries]
+        return [self.recall(q, k, w) for q, w in zip(queries, whens)]
+
+    @staticmethod
+    def _at_args(when) -> list[str]:
+        """`--at` for the question's own date, or nothing.
+
+        Temporal weight decays from a memory's `observed_at` to "now", and the
+        result is clamped up to the superseded floor — a clamp that binds at
+        two half-lives (360 days by default). Every corpus here is dated 2023,
+        so against the wall clock EVERY candidate returns the floor, the
+        temporal factor becomes a constant multiplier, and it ranks nothing.
+        Scoring as of the moment the question was asked is what makes the
+        factor mean anything, and is the question a real agent asks anyway.
+
+        Older binaries reject the flag; `_supports_at` falls back once.
+        """
+        if when is None:
+            return []
+        try:
+            iso = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (AttributeError, ValueError):
+            return []
+        return ["--at", iso]
 
     def recall(self, query: str, k: int, when=None) -> list[RecallHit]:
-        out = self._run(["recall", query[:1000], "--top-k", str(k)])
+        args = ["recall", query[:1000], "--top-k", str(k)]
+        if self.supports_at is not False:
+            args += self._at_args(when)
+        try:
+            out = self._run(args)
+        except RuntimeError as e:
+            # A binary predating --at exits 2 with "unknown flag". Drop the
+            # flag, record it, and keep going rather than failing the run —
+            # but say so, because the arm is then NOT measuring what it claims.
+            if self.supports_at is None and "--at" in str(e):
+                self.supports_at = False
+                print(f"[kannaka] binary rejects --at; temporal scoring will use the WALL CLOCK "
+                      f"and the temporal exponent cannot rank on this corpus: {str(e)[:120]}",
+                      file=sys.stderr)
+                out = self._run(["recall", query[:1000], "--top-k", str(k)])
+            else:
+                raise
+        else:
+            if self.supports_at is None and when is not None:
+                self.supports_at = True
         hits = []
         for line in reversed(out.strip().splitlines()):
             line = line.strip()

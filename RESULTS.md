@@ -571,3 +571,79 @@ Reading it, conservatively:
 - **Multi-session remains the open loss** (0.40 / 0.20). Of the three still wrong for kannaka, the
   failures are now under-enumeration rather than missing arithmetic: the sweep finds most items and
   misses one. That is a different problem from the one this change fixed.
+
+## 2026-09-21 — temporal recall: a negative result, and the bug that made it unmeasurable
+
+`KANNAKA_RECALL_TEMPORAL_EXP` discounts a memory by how long ago it was confirmed, so a fact that
+has been superseded ranks below the one that replaced it (ADR-0051 / L8). It has shipped off. This
+is the first measurement of turning it on — and the first that *could* be one.
+
+**Why no earlier run could have measured it.** `temporal_weight` decays `0.5^(age/half_life)` from a
+memory's `observed_at` to *now*, then clamps the result **up** to the superseded floor (0.25). That
+clamp binds at exactly two half-lives — 360 days at the default. Every corpus here is dated 2023 and
+read in 2026, so **every candidate returned the floor**: the factor became a constant multiplier,
+which cannot reorder anything. It does not fail and nothing reports it. Measured through the CLI on
+two claims observed three months apart:
+
+| | scores |
+|---|---|
+| flag off | 1.0 / 1.0 |
+| flag on, wall clock | **0.25 / 0.25** — identical, ranks nothing |
+| flag on, `--at` the question date | 0.996 / 0.707 — `0.5^(90/180)`, exactly |
+
+Lowering `KANNAKA_RECALL_TEMPORAL_FLOOR` does not help; it only moves the constant (0.05 for
+everything). The fix was `kannaka recall --at` (kannaka-memory#994) plus passing each question's
+`asked_at` from the harness, which `run.py` had always supplied and the adapter had always dropped.
+
+**Three arms, same 30 questions, same stores, k=15, kannaka_minilm** (`temporal2-*`):
+
+| arm | hit@15 | recall@15 | evid@15 | MRR |
+|---|---|---|---|---|
+| A — flag off | 1.000 | 0.950 | 0.848 | **0.9183** |
+| B — exp=1.0, half-life 180d (**the shipped setting**) | 1.000 | 0.950 | 0.848 | **0.9028** |
+| C — exp=1.0, half-life 3000d | 1.000 | 0.950 | 0.848 | **0.9186** |
+
+Retrieval quality is **identical across all three**. The flag finds nothing new, loses nothing, and
+only reorders — barely: **2 of 30 questions changed at all.**
+
+MRR by question type (n=5 each):
+
+| qtype | A off | B hl180 | C hl3000 |
+|---|---|---|---|
+| knowledge-update | 1.000 | **0.900** | 1.000 |
+| multi-session | 0.818 | 0.825 | 0.820 |
+| single-session-assistant | 1.000 | 1.000 | 1.000 |
+| single-session-preference | 1.000 | 1.000 | 1.000 |
+| single-session-user | 0.692 | 0.692 | 0.692 |
+| temporal-reasoning | 1.000 | 1.000 | 1.000 |
+
+The two questions that moved, A → B:
+
+```
+knowledge-update    1.000 -> 0.500   WORSE
+multi-session       0.091 -> 0.125   better
+```
+
+Reading it:
+- **The one category the feature exists for is the one it hurt.** Knowledge-update questions are
+  precisely the superseded-fact case; on one of those five, enabling the flag pushed the gold answer
+  from rank 1 to rank 2. That is a single question, so it is not evidence that temporal ranking
+  *harms* knowledge-update — but it is certainly not evidence it helps, and it is the opposite of
+  the designed effect.
+- **Arm C is the consistency check, not a candidate.** A 3000-day half-life makes every weight ≈1.0
+  once ages are days rather than years, so C should be indistinguishable from A — and is (0.9186 vs
+  0.9183). Together with B differing under deterministic scoring on identical stores, that is what
+  proves `--at` actually reached the scorer.
+- **Recommendation: leave the ADR-0051 Phase 3 gate closed.** On this benchmark the best case is
+  neutral and the shipped setting is marginally negative. The M9/M8/M3 preconditions
+  (kannaka-memory#992) stay worth having regardless — each is correct whether the flag is on or off.
+- What this does NOT settle: longmemeval_s has five knowledge-update questions and no question whose
+  gold answer is explicitly stamped `--supersedes`. A corpus built to exercise supersession directly
+  would be a fairer test of the mechanism than one where only 2 of 30 rankings can move at all.
+
+**A measurement fault this exposed:** the three arms differed only by environment variable, and
+*no artifact recorded which arm ran with what*. The per-question store — and the `queries.ndjson`
+that would have shown the per-row `at` — is deleted at the end of a run, so afterwards the arms were
+distinguishable only by trusting the shell history that launched them. `run.py` now records the
+`KANNAKA_RECALL_*` flags in `manifest.json`, the same way the beam trace is recorded: an arm that
+cannot show what it ran with cannot be compared against one that ran differently.

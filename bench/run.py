@@ -84,7 +84,12 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
     # Many questions on one store (LoCoMo): one process when the adapter can.
     if len(questions) > 1 and hasattr(adapter, "recall_many"):
         t0 = time.perf_counter()
-        all_hits = adapter.recall_many([q.question for q in questions], k_fetch)
+        # Dates go with the questions: the kannaka adapter scores temporal
+        # recency as of when each was asked, which on a dated corpus is the
+        # difference between the temporal factor ranking and being a constant.
+        all_hits = adapter.recall_many(
+            [q.question for q in questions], k_fetch, [q.asked_at for q in questions]
+        )
         per_q_ms = (time.perf_counter() - t0) * 1000.0 / max(1, len(questions))
         timed_hits = [(h, per_q_ms) for h in all_hits]
     else:
@@ -199,6 +204,15 @@ def main(argv=None):
                 # indistinguishable in the record.
                 if hasattr(ad, "beam_stats"):
                     manifest.setdefault("beam", {})[n] = ad.beam_stats()
+                # Ranking flags belong beside the numbers they produced. Three
+                # arms of a temporal A/B were written with no record of which
+                # flag each ran with, and the store that would have shown it is
+                # deleted at the end of the run — so the arms were only
+                # distinguishable by trusting shell history.
+                flags = {k: v for k, v in os.environ.items()
+                         if k.startswith("KANNAKA_RECALL_") or k in ("KANNAKA_ENCODER",)}
+                if flags:
+                    manifest.setdefault("kannaka_flags", {})[n] = flags
             except Exception as e:
                 for q in questions:
                     rows.append({"dataset": a.dataset, "adapter": n, "question_id": q.id, "qtype": q.qtype,
