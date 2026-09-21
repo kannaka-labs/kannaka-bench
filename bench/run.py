@@ -204,6 +204,15 @@ def main(argv=None):
                 # indistinguishable in the record.
                 if hasattr(ad, "beam_stats"):
                     manifest.setdefault("beam", {})[n] = ad.beam_stats()
+                # Ranking flags belong beside the numbers they produced. Three
+                # arms of a temporal A/B were written with no record of which
+                # flag each ran with, and the store that would have shown it is
+                # deleted at the end of the run — so the arms were only
+                # distinguishable by trusting shell history.
+                flags = {k: v for k, v in os.environ.items()
+                         if k.startswith("KANNAKA_RECALL_") or k in ("KANNAKA_ENCODER",)}
+                if flags:
+                    manifest.setdefault("kannaka_flags", {})[n] = flags
             except Exception as e:
                 for q in questions:
                     rows.append({"dataset": a.dataset, "adapter": n, "question_id": q.id, "qtype": q.qtype,
