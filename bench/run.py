@@ -194,6 +194,11 @@ def main(argv=None):
                           consolidate=a.consolidate)
                 if n == "kannaka" and getattr(ad, "version", None):
                     manifest["adapter_versions"]["kannaka"] = ad.version
+                # Whether the attention beam actually fired, and how sparse it
+                # was. Without this a "beam" arm and a dense arm are
+                # indistinguishable in the record.
+                if hasattr(ad, "beam_stats"):
+                    manifest.setdefault("beam", {})[n] = ad.beam_stats()
             except Exception as e:
                 for q in questions:
                     rows.append({"dataset": a.dataset, "adapter": n, "question_id": q.id, "qtype": q.qtype,
