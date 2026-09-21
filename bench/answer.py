@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -54,11 +55,130 @@ ANSWER_SYS_PREFERENCE = ("You are answering a question about a user's past conve
                          "user is asking for a suggestion or recommendation: answer it, and make the answer fit what "
                          "the excerpts show about the user's situation, tastes and constraints, naming those specifics. "
                          "Do not say \"I don't know\": if the excerpts show nothing relevant, give a generic answer.")
+ANSWER_SYS_AGGREGATE = (
+    "You are answering a question about a user's past conversations with an assistant. You are given excerpts "
+    "retrieved from those conversations, in chronological order, each with its date, and the date the question is "
+    "asked. They may be irrelevant or incomplete. If two excerpts state conflicting facts about the SAME thing, the "
+    "most recent one is current.\n"
+    "This question asks for a number — a count, a total, or an elapsed time — so answer it in two steps.\n"
+    "Step 1 - enumerate. List every item, event or value in the excerpts that could qualify, each with its date. "
+    "Sweep all of them: what one question needs is usually spread across several conversations on different dates, "
+    "and an item mentioned only in passing still counts. Do not drop one on your own reasoning unless the excerpts "
+    "explicitly rule it out.\n"
+    "Step 2 - compute. Apply what the question actually asks to that list and work the number out. Counting a set of "
+    "things means counting the distinct ones. A combined time, distance or amount means ADDING the individual values "
+    "- naming the parts separately is not an answer. Time between two dates means subtracting them.\n"
+    "If the excerpts genuinely do not contain what is needed, say \"I don't know\". Otherwise end with the final "
+    "answer on its own last line, as a plain number or short phrase."
+)
+
 JUDGE_SYS = ("You are grading an answer to a question against a reference answer. Reply with exactly one word: "
              "CORRECT if the answer conveys the same fact(s) as the reference (wording may differ; extra correct "
              "detail is fine), otherwise INCORRECT. An answer of \"I don't know\" is INCORRECT unless the reference "
              "says the information is unavailable.")
 
+
+
+# Routing reads the QUESTION, never `qtype` — the dataset's gold label, which
+# a deployed system does not have. Deliberately narrow and auditable: every
+# row records the route it took, so a regression can be attributed to routing
+# rather than to the prompt it selected.
+# Every LongMemEval question needing a computed number opens with one of
+# these; tuned against the 30 real question texts, not invented ones. It fires
+# on multi-session (5/5) and also on the temporal and knowledge-update rows
+# that ask for a number — deliberately, because the prompt it selects is a
+# superset of the plain one and those categories need the same arithmetic.
+AGGREGATE_RE = re.compile(
+    r"\b(how many|how much|how long|how often|in total|altogether|combined|total number)\b",
+    re.I,
+)
+# Real preference rows are all "Can you recommend/suggest ...". The trap is
+# single-session-assistant: "Can you remind me ... the restaurant you
+# recommended" is a past-fact lookup that scores 1.00, and the preference
+# prompt forbids "I don't know" and asks for a generic answer — so matching
+# bare "recommend" would replace a correct recall with an invention.
+PREFERENCE_RE = re.compile(
+    r"\b(can you (?:recommend|suggest)|could you (?:recommend|suggest)"
+    r"|what should i|which should i|any (?:ideas|suggestions|recommendations)"
+    r"|do you have any (?:suggestions|recommendations))\b",
+    re.I,
+)
+REMINDER_RE = re.compile(r"\bremind me\b|\bremember\b|\bwhat was\b|\bwhat did\b", re.I)
+
+
+def route_question(question: str, qtype: str, mode: str) -> str:
+    """Which system prompt to use: 'aggregate', 'preference' or 'plain'.
+
+    `mode='qtype'` reproduces the pre-v4 behaviour (gold label) so the cost of
+    the leak is measurable; `mode='question'` is the honest, deployable path.
+    """
+    if mode == "qtype":
+        return "preference" if "preference" in (qtype or "") else "plain"
+    q = question or ""
+    if AGGREGATE_RE.search(q):
+        return "aggregate"
+    # A question asking what was said or recommended IN THE PAST is a lookup,
+    # whatever verbs it contains — it must never reach the preference prompt.
+    if PREFERENCE_RE.search(q) and not REMINDER_RE.search(q):
+        return "preference"
+    return "plain"
+
+
+SYS_BY_ROUTE = {
+    "aggregate": ANSWER_SYS_AGGREGATE,
+    "preference": ANSWER_SYS_PREFERENCE,
+    "plain": ANSWER_SYS,
+}
+
+
+# The judge is asked to mark an abstention INCORRECT (unless the reference
+# itself says the information is unavailable) and does not always comply — it
+# graded two near-identical abstentions on the same question differently for
+# two adapters. A judge that lets abstentions through rewards the systems that
+# answer least, so the rule is enforced here instead of only requested.
+ABSTAIN_RE = re.compile(
+    r"(i don'?t know"
+    r"|do(?:es)? not (?:contain|specify|mention|provide|state|include)"
+    r"|don'?t (?:contain|specify|mention|provide|state)"
+    r"|cannot (?:determine|calculate|tell|find|answer)"
+    r"|can'?t (?:determine|calculate|tell|find)"
+    r"|not enough information"
+    r"|unable to determine"
+    r"|no (?:specific )?(?:information|mention|record|details))",
+    re.I,
+)
+# A gold answer that itself says the information is not available — the one
+# case where abstaining IS the correct answer.
+GOLD_UNAVAILABLE_RE = re.compile(
+    r"(not (?:available|mentioned|specified|stated|provided)"
+    r"|no (?:information|mention|record)"
+    r"|unavailable|did not (?:say|mention|specify))",
+    re.I,
+)
+
+
+def is_abstention(answer: str) -> bool:
+    """True when the answer's FINAL position is 'I cannot say'.
+
+    Deliberately narrow: the last non-empty line, or a short whole answer.
+    An answer that hedges in the middle and then commits to a value is not an
+    abstention, and must not be scored as one.
+    """
+    a = (answer or "").strip()
+    if not a:
+        return True
+    lines = [l.strip() for l in a.splitlines() if l.strip()]
+    if lines and ABSTAIN_RE.search(lines[-1]):
+        return True
+    return len(a) < 200 and bool(ABSTAIN_RE.search(a))
+
+
+def grade(verdict: str, answer: str, gold: str) -> tuple[bool, bool]:
+    """(correct, overridden). Enforces the abstention rule the judge is given."""
+    correct = verdict.strip().upper().startswith("CORRECT")
+    if correct and is_abstention(answer) and not GOLD_UNAVAILABLE_RE.search(gold or ""):
+        return False, True
+    return correct, False
 
 def chat(url: str, key: str, model: str, system: str, user: str, max_tokens: int = 300, temperature: float = 0.0) -> tuple[str, dict]:
     body = {"model": model, "max_tokens": max_tokens, "temperature": temperature,
@@ -181,6 +301,9 @@ def main(argv=None):
     ap.add_argument("--per-session", type=int, default=1,
                     help="turns per hit session shown to the model, filled from the row's candidates (default 1)")
     ap.add_argument("--max-excerpts", type=int, default=40, help="cap on excerpts before pair expansion")
+    ap.add_argument("--route", choices=("question", "qtype"), default="question",
+                    help="how to pick the system prompt: from the question text (default, deployable) "
+                         "or from the dataset's gold qtype label (pre-v4 behaviour, for comparison)")
     a = ap.parse_args(argv)
 
     url = os.environ.get("BENCH_LLM_URL", "http://127.0.0.1:4000/v1")
@@ -229,7 +352,8 @@ def main(argv=None):
             mode = f"top-{k}"
         asked = q.asked_at.strftime("%Y-%m-%d") if q.asked_at else "unknown date"
         user = f"Question date: {asked}\n\nExcerpts:\n{text}\n\nQuestion: {q.question}"
-        system = ANSWER_SYS_PREFERENCE if "preference" in (r.get("qtype") or "") else ANSWER_SYS
+        route = route_question(q.question, r.get("qtype") or "", a.route)
+        system = SYS_BY_ROUTE[route]
         t0 = time.perf_counter()
         try:
             answer, au = chat(url, key, answer_model, system, user, max_tokens=a.max_answer_tokens)
@@ -249,10 +373,12 @@ def main(argv=None):
                 break
             continue
         globals()["_consec"] = 0
-        correct = verdict.strip().upper().startswith("CORRECT")
+        correct, judge_overridden = grade(verdict, answer, q.answer)
         row = {"adapter": r["adapter"], "question_id": r["question_id"], "qtype": r["qtype"], "mode": mode,
                "n_excerpts": len(ctx_items), "excerpt_cap": EXCERPT_CHAR_CAP, "pair_turns": PAIR_TURNS,
                "per_session": a.per_session, "max_excerpts": a.max_excerpts, "max_answer_tokens": a.max_answer_tokens,
+               "route": route, "route_mode": a.route,
+               "judge_overridden": judge_overridden,
                "hit_at_k": r["any_hit_at_k"], "answer": answer, "gold": q.answer, "verdict": verdict, "correct": correct,
                "answer_model": answer_model, "judge_model": judge_model, "answer_ms": round(ans_ms),
                "tokens": {"answer": au, "judge": ju}}

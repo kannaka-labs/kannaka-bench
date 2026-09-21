@@ -502,3 +502,72 @@ architecture's distinguishing mechanism is measured and, as it stands today, it 
 itself. The honest next questions are whether repeated cycles over a longer-lived store behave
 differently (every store here is one-shot), and whether dream rows should be excluded from recall
 by default (kannaka-memory #963 / a new issue).
+
+## 2026-09-20 — answer stage v4: enumerate-then-compute, and two instrument fixes
+
+Same retrieval rows as the k=15 run above (`s-5pertype-k15`, nothing re-retrieved), re-answered
+with `bench/answer.py --tag v4`. Three changes, each measurable on its own.
+
+**1. An aggregation route.** Multi-session scored 0.20 / 0.00 at k=15 while hit@15 was 1.000 — every
+gold session was already in the window. Reading the four kannaka failures, none is truncation
+(86–185 completion tokens against a 600 cap) and none is a retrieval miss: the model states the
+components and stops short of the arithmetic. Gold `3.5 weeks` came back as "**two weeks**" and "**a
+week and a half**" as two bullets, never added. Gold `5 model kits` was answered `4`; gold `3 items`
+was answered `2`; gold `2 projects` found the second project and then reasoned it away. So the
+aggregate prompt asks for two explicit steps — enumerate every candidate with its date, sweeping all
+excerpts and dropping nothing on the model's own reasoning; then compute, adding components for a
+combined total rather than naming them separately.
+
+The prompt is **additive, not a replacement**: it keeps the chronology and latest-wins rules
+verbatim. That matters because surface form cannot separate the types — "How many Korean restaurants
+have I tried?" (knowledge-update, latest-wins) is the same shape as "How many model kits have I
+worked on?" (multi-session, enumerate-all), and 4 of 5 temporal questions also open "How many
+days…". A replacement prompt routed onto those would put two 0.80 categories at risk.
+
+**2. Routing reads the question, not the gold label.** v2 chose its prompt with
+`"preference" in r["qtype"]` — the dataset's own type label, at inference time. No deployed system
+has that, so the published 0.733 was optimistic by whatever the preference prompt is worth.
+`--route question` (now the default) reads the question text; `--route qtype` reproduces the old
+behaviour. On these 30 questions the honest router reproduces the gold-label routing **exactly, 0
+disagreements** — so the leak cost nothing here, but it should not have been in the number's path.
+Routing by gold type: multi-session 5/5 → aggregate, preference 5/5 → preference,
+single-session-assistant 5/5 → plain, plus 7 rows of other types that ask for a number.
+
+One trap worth recording: matching a bare "recommend" sends *"Can you remind me … the restaurant you
+recommended"* (single-session-assistant, scoring **1.00**) to the preference prompt, which forbids
+"I don't know" and asks for a generic answer — replacing correct recall with invention. Past-tense
+lookups are excluded explicitly.
+
+**3. A deterministic abstention guard on the judge.** `JUDGE_SYS` says an "I don't know" answer is
+INCORRECT unless the reference says the information is unavailable. The judge does not reliably
+comply: on one temporal question it graded two near-identical abstentions **differently** for the two
+adapters, handing vector_numpy a free point for an answer ending "I don't know" against gold `2`. A
+judge that lets abstentions through rewards whichever system answers least, so the rule is now
+enforced in code (`grade()`), recorded per row as `judge_overridden`. Replayed over all 120 already-
+graded rows of this run it flips that one row and **nothing else** — v2 is unaffected, so the 0.733
+baseline above stands as published.
+
+| adapter | v2 | v4 raw | **v4 corrected** | multi-session v2 → v4 |
+|---|---|---|---|---|
+| kannaka_minilm | 0.733 | 0.800 | **0.800** | 0.20 → **0.40** |
+| vector_numpy | 0.733 | 0.767 | **0.733** | 0.00 → **0.20** |
+
+By type (v4 corrected, n=5 each), kannaka_minilm / vector_numpy: knowledge-update 0.80 / 0.80,
+multi-session **0.40 / 0.20**, single-session-assistant 1.00 / 1.00, preference 1.00 / 0.80,
+single-session-user 0.80 / 0.80, temporal-reasoning 0.80 / 0.80. Prompt ~5.5k tok/q, essentially
+unchanged from v2's 5.4k — this buys nothing with context.
+
+Reading it, conservatively:
+- **The diagnosed mechanism is fixed, and that is the solid part.** The `3.5 weeks` row — components
+  found but never summed — is now answered `3.5 weeks` by **both** adapters. That is the specific
+  failure the change was built for, confirmed twice.
+- **The aggregate totals are not yet evidence.** n=5 per type: one question is ±0.20. kannaka gains
+  two questions overall, vector_numpy none once the mis-grade is removed. The preference column moves
+  +0.20 for one adapter and −0.20 for the other on *identical* routing and prompt, which is the
+  signature of judge/answer nondeterminism, not of the change.
+- **Nothing regressed where the risk was.** single-session-assistant held 1.00 / 1.00, and
+  knowledge-update held 0.80 / 0.80 despite two of its rows taking the aggregate route — the
+  evidence that keeping the prompt additive was the right call.
+- **Multi-session remains the open loss** (0.40 / 0.20). Of the three still wrong for kannaka, the
+  failures are now under-enumeration rather than missing arithmetic: the sweep finds most items and
+  misses one. That is a different problem from the one this change fixed.
