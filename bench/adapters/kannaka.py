@@ -39,22 +39,59 @@ class KannakaAdapter(Adapter):
         self.batch = os.environ.get("KANNAKA_BATCH", "auto")   # auto | 1 | 0
         self.batch_ok = None                                    # learned on first use
 
+    #: `[beam] scored 512 of 1671 memories (30.6%) -> 5 results`
+    _BEAM_RE = re.compile(r"\[beam\] scored (\d+) of (\d+) memories")
+
+    def _note_stderr(self, err: str) -> None:
+        """Record the attention-beam trace instead of discarding it.
+
+        Both runners captured stderr and used it only on failure, so a
+        successful sparse recall left no evidence it had happened. A bench arm
+        that cannot show whether its feature fired cannot be compared against
+        one that did — the first beam run was uninterpretable for exactly this
+        reason. Parsed here, surfaced in the manifest by run.py.
+        """
+        if not err:
+            return
+        for m in self._BEAM_RE.finditer(err):
+            scored, total = int(m.group(1)), int(m.group(2))
+            self.beam["recalls"] += 1
+            self.beam["scored"] += scored
+            self.beam["total"] += total
+
     def _batch_run(self, args: list[str], timeout: float):
         """One batch subprocess; returns (returncode, stdout, stderr). Stubbed in tests."""
         r = subprocess.run([self.bin] + args, env=self.env, capture_output=True, text=True,
                            timeout=timeout, encoding="utf-8", errors="replace")
-        return r.returncode, r.stdout or "", r.stderr or ""
+        err = r.stderr or ""
+        self._note_stderr(err)
+        return r.returncode, r.stdout or "", err
 
     def _run(self, args: list[str]) -> str:
         r = subprocess.run([self.bin] + args, env=self.env, capture_output=True, text=True,
                            timeout=self.timeout_s, encoding="utf-8", errors="replace")
+        self._note_stderr(r.stderr or "")
         if r.returncode != 0:
             raise RuntimeError(f"kannaka {args[0]} failed: {r.stderr.strip()[:200]}")
         return r.stdout
 
+    def beam_stats(self) -> dict:
+        """What the beam actually did, or that it never fired.
+
+        `recalls == 0` with KANNAKA_RECALL_BEAM set is a real finding, not a
+        blank: it means the store had no skip links to walk (they are written
+        only by dream consolidation) and every recall silently fell back to a
+        dense scan.
+        """
+        b = dict(self.beam)
+        b["mean_coverage"] = round(b["scored"] / b["total"], 4) if b["total"] else None
+        b["enabled_env"] = os.environ.get("KANNAKA_RECALL_BEAM", "")
+        return b
+
     def open(self, run_dir: str) -> None:
         self.dir = os.path.join(run_dir, "kannaka")
         os.makedirs(self.dir, exist_ok=True)
+        self.beam = {"recalls": 0, "scored": 0, "total": 0}
         self.env = dict(os.environ, KANNAKA_DATA_DIR=self.dir,
                         KANNAKA_NATS_URL="nats://127.0.0.1:1",   # off the swarm, always
                         KANNAKA_FACET_DECOMPOSE=os.environ.get("KANNAKA_FACET_DECOMPOSE", "1"))
