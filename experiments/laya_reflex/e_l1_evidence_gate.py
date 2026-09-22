@@ -128,15 +128,31 @@ def main():
     ap.add_argument("--adapter", default="kannaka_minilm")
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default=None, help="laya checkpoint override (english|multilingual|typed-decisions)")
+    ap.add_argument("--agent-dir", default=None,
+                    help="E-L1b: score a fine-tuned agent directory (laya.Agent) instead of the Router")
+    ap.add_argument("--device", default=None, help="cuda|cpu for --agent-dir (default: laya's choice)")
     ap.add_argument("--route-limit", type=int, default=0, help="E-L2: cap questions (0 = all)")
     ap.add_argument("--skip-route", action="store_true")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
-    from laya import Router  # noqa: E402
-
     t0 = time.time()
-    router = Router(preload=False)
+    if args.agent_dir:
+        import laya  # noqa: E402
+
+        agent = laya.Agent(args.agent_dir, device=args.device) if args.device else laya.Agent(args.agent_dir)
+
+        class _Fixed:
+            """Router-shaped wrapper so the rest of the script is unchanged."""
+
+            def predict(self, state, questions, model=None):
+                return agent.predict(state, questions)
+
+        router = _Fixed()
+    else:
+        from laya import Router  # noqa: E402
+
+        router = Router(preload=False)
     qs = load_dataset(args.dataset)
     print(f"dataset: {len(qs)} questions; router ready in {time.time() - t0:.1f}s", flush=True)
 

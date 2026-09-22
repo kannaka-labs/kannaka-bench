@@ -97,7 +97,11 @@ class KannakaAdapter(Adapter):
         self.supports_at = None
         self.env = dict(os.environ, KANNAKA_DATA_DIR=self.dir,
                         KANNAKA_NATS_URL="nats://127.0.0.1:1",   # off the swarm, always
-                        KANNAKA_FACET_DECOMPOSE=os.environ.get("KANNAKA_FACET_DECOMPOSE", "1"))
+                        # Facets default OFF since 2026-09-22: on longmemeval_s the facets-off chiral
+                        # arm reproduced retrieval exactly at 2.8x lower recall latency and
+                        # 4x less disk (RESULTS.md). OFF is also the kannaka-memory binary's
+                        # own default; set KANNAKA_FACET_DECOMPOSE=1 to run the facets arm.
+                        KANNAKA_FACET_DECOMPOSE=os.environ.get("KANNAKA_FACET_DECOMPOSE", "0"))
         try:
             self.version = subprocess.run([self.bin, "--version"], capture_output=True, text=True,
                                           timeout=10).stdout.strip()

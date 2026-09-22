@@ -36,6 +36,22 @@ Ask Laya a `choice` over the six types from the question text alone.
 routing in the answer stage (and the leak is closed). Below that the routing stays off and the
 answer stage runs un-routed, which is the honest baseline anyway.
 
+### Outcomes (2026-09-22)
+
+- **E-L1: loss.** AUROC 0.750 (0.748 on GPU), Brier 0.092 against 0.096 for "always no".
+- **E-L2: loss.** Accuracy 0.314; the model answers the first criterion for 348 of 500.
+- **E-L1b (fine-tune, `build_e_l1b_dataset.py` + `train_e_l1b.py`, RTX 4090, 390 s): PASS.**
+  Held-out AUROC **0.963**, Brier 0.066, recall 0.95 / precision 0.59 at p ≥ 0.5, 20.6 ms per
+  decision. Same rule as E-L1, same 450 decisions, the 30 questions never trained on.
+  Raw outputs: `results/e_l1b_finetuned_heldout.json`, control `results/e_l1_baseline_gpu.json`.
+
+## E-L1c — does the gate improve answers? (next)
+
+Answer stage over the gated candidates (fine-tuned `noul` ≥ 0.5, minimum 1 row) versus the
+plain top-15, same 30 questions, same judge: accuracy and tokens per question.
+**Decision rule:** the gate ships as an answer-stage option if accuracy is within one question
+of top-15 at ≤ half the tokens, or higher at any token count. Otherwise it stays a research row.
+
 ## Planned, not started
 
 - **E-L3 supersession at write time** (`noul` "does this update an existing memory?", then
