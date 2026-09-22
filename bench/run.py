@@ -30,6 +30,7 @@ ADAPTERS = {
     "vector_bge": "bench.adapters.baselines:VectorBgeAdapter",
     "supermemory": "bench.adapters.supermemory:SupermemoryAdapter",
     "supermemory_mem": "bench.adapters.supermemory:SupermemoryMemAdapter",
+    "mem0": "bench.adapters.mem0:Mem0Adapter",
 }
 
 
@@ -45,6 +46,18 @@ def git_commit() -> str:
                               cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).stdout.strip()
     except Exception:
         return "unknown"
+
+
+def recall_flags() -> dict:
+    """The kannaka ranking knobs in force for this process.
+
+    Returns `{}` when none are set — and that empty dict is a result, not a
+    missing value. The caller must record it either way: an arm that ran with
+    the flag off is the control, and a control indistinguishable from a
+    recording failure is not a control.
+    """
+    return {k: v for k, v in os.environ.items()
+            if k.startswith("KANNAKA_RECALL_") or k in ("KANNAKA_ENCODER",)}
 
 
 def session_cap(hits, k: int, cap: int, level: str):
@@ -169,6 +182,20 @@ def main(argv=None):
         "host": platform.node(), "platform": platform.platform(), "python": sys.version.split()[0],
         "cpu_count": os.cpu_count(), "stores": len(stores),
         "adapter_versions": {},
+        # Ranking flags belong beside the numbers they produced. Three arms of a
+        # temporal A/B were written with no record of which flag each ran with,
+        # and the store that would have shown it is deleted at the end of the
+        # run — so the arms were only distinguishable by trusting shell history.
+        #
+        # Recorded HERE, once, rather than per-adapter after a successful
+        # run_store, for two reasons. The environment is process-global and
+        # cannot differ between adapters, so the per-adapter capture was
+        # measuring the same thing N times; and an adapter that raised left no
+        # entry, so a missing key meant either "no flags" or "this arm died".
+        # An EMPTY dict is the finding in the control arm — the arm with the
+        # flag off is exactly the one the old `if flags:` guard recorded
+        # nothing for, which defeated the fix in the case it was written for.
+        "kannaka_flags": {n: dict(recall_flags()) for n in names},
     }
     rows: list[dict] = []
     finished: set = set()      # (adapter, question id) pairs kept from a --resume
@@ -183,7 +210,15 @@ def main(argv=None):
         print(f"resume: keeping {len(rows)} rows, {len(finished)} (adapter, question) pairs done", flush=True)
     t_start = time.perf_counter()
     for si, (sid, items, questions, level) in enumerate(stores):
+        # A start line, not only the completion line below. The completion line
+        # prints after EVERY adapter has finished the store, so a slow ingest
+        # produced no output at all: a mem0 pilot ran 39 minutes in silence and
+        # "working" was indistinguishable from "hung" — the log had to be
+        # diagnosed from the vector store's byte count instead.
+        print(f"[{si + 1}/{len(stores)}] {sid}: START {len(items)} items, "
+              f"{len(questions)} q, adapters {','.join(adapters)}", flush=True)
         for n, ad in adapters.items():
+            t_ad = time.perf_counter()
             if finished and all((n, q.id) in finished for q in questions):
                 continue
             if a.max_items and len(items) > a.max_items and n in set(a.max_items_adapters.split(",")):
@@ -204,15 +239,13 @@ def main(argv=None):
                 # indistinguishable in the record.
                 if hasattr(ad, "beam_stats"):
                     manifest.setdefault("beam", {})[n] = ad.beam_stats()
-                # Ranking flags belong beside the numbers they produced. Three
-                # arms of a temporal A/B were written with no record of which
-                # flag each ran with, and the store that would have shown it is
-                # deleted at the end of the run — so the arms were only
-                # distinguishable by trusting shell history.
-                flags = {k: v for k, v in os.environ.items()
-                         if k.startswith("KANNAKA_RECALL_") or k in ("KANNAKA_ENCODER",)}
-                if flags:
-                    manifest.setdefault("kannaka_flags", {})[n] = flags
+                # Mem0 spends an LLM call per ingested turn and can drop turns
+                # in extraction; every other adapter ingests free and lossless.
+                # Without these columns its row reads as like-for-like.
+                if hasattr(ad, "ingest_stats"):
+                    manifest.setdefault("ingest_stats", {})[n] = ad.ingest_stats()
+                print(f"[{si + 1}/{len(stores)}] {sid}: {n} done in "
+                      f"{time.perf_counter() - t_ad:.1f}s", flush=True)
             except Exception as e:
                 for q in questions:
                     rows.append({"dataset": a.dataset, "adapter": n, "question_id": q.id, "qtype": q.qtype,
