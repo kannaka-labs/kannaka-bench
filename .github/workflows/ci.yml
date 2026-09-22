@@ -1,0 +1,20 @@
+# kannaka-bench CI: the unit suite is plain python + numpy, synthetic fixtures,
+# no downloads, no kannaka binary (the adapter test stubs the CLI). It runs in
+# well under a second, so it gates every push and PR. The real benchmark runs
+# stay manual: they need the datasets, an embed server and hours of CPU.
+name: ci
+on:
+  push:
+    branches: [master]
+  pull_request:
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet "numpy>=1.26"
+      - run: python tests/test_bench.py
