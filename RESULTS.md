@@ -647,3 +647,88 @@ that would have shown the per-row `at` — is deleted at the end of a run, so af
 distinguishable only by trusting the shell history that launched them. `run.py` now records the
 `KANNAKA_RECALL_*` flags in `manifest.json`, the same way the beam trace is recorded: an arm that
 cannot show what it ran with cannot be compared against one that ran differently.
+
+## 2026-09-22 — The store shape was wrong: re-take on the corrected ingest (kannaka-memory #1039)
+
+Every kannaka row above was measured on stores built by one `remember --batch` per question,
+and kannaka-memory #917/#1031 showed that a single-process bulk load stayed on the FLAT (v1)
+medium: it never reloaded, so it never became chiral, so it minted **no facet rows** even with
+`KANNAKA_FACET_DECOMPOSE=1` — while the same input through separate `remember` calls produced
+a chiral store with 3–4.5× the rows. Nick ruled that an ingest correctness bug, not a benchmark
+artifact; #1039 (v0.16.11) makes a fresh store chiral from birth. Same 30 questions, k=15,
+same MiniLM embeddings, same host; run `s-5pertype-k15-chiral`, binary built from #1039's first
+commit (`3cc037c`; the second commit only syncs an in-process view that recall does not read).
+
+| run | hit@15 | recall@15 | evid@15 | MRR | recall p50 | ingest ms/item | bytes/item | avg store |
+|---|---|---|---|---|---|---|---|---|
+| `postflip-k15` (flat, no facets — the published row) | 1.000 | 0.950 | 0.848 | 0.918 | 2 838 ms | 376 | 42 KB | 21 MB |
+| `s-5pertype-k15-chiral` (chiral from birth, facets minted) | 0.967 | 0.958 | 0.804 | 0.919 | 4 036 ms | 255 | 185 KB | 92 MB |
+
+Six of thirty questions moved (two better, four worse):
+
+```
+e47becba      single-session-user        evid 0.50 -> 1.00
+b46e15ed      temporal-reasoning         evid 0.00 -> 0.20
+b5ef892d      multi-session              evid 1.00 -> 0.50
+75832dbd      single-session-preference  evid 1.00 -> 0.00
+gpt4_59149c77 temporal-reasoning         evid 1.00 -> 0.50
+6d550036      multi-session              hit  1    -> 0      (session-level miss)
+```
+
+Reading it, and this is a loss to publish:
+- **Retrieval did not improve.** Session-level recall is within a question (0.950 → 0.958);
+  evidence coverage fell 0.044, about 1.3 questions of turn-level coverage, and one
+  multi-session question lost its session hit outright. With n=5 per type this is noise-level
+  either way — but the facet rows, which #925 credited with a third of recall, bought nothing
+  measurable here.
+- **The costs are not noise.** Recall p50 is up 42% (more rows to resonate through) and the
+  store is **4.4× larger on disk** (185 KB per source item; 92 MB per 500-turn store). Ingest
+  per item got *faster* (376 → 255 ms) because the chiral path no longer pays the flat medium's
+  O(n) interference per insert — the #1031 finding, confirmed at this n.
+- So the honest published row for the standard setting is now **0.967 / 0.958 / 0.804**, not
+  1.000 / 0.950 / 0.848, and the footprint column is 185 KB, not 42 KB. Every row above that
+  says `kannaka_minilm` at k=15 was taken on the flat shape.
+
+Running next: the same 30 questions on the chiral path with `KANNAKA_FACET_DECOMPOSE=0`
+(`s-5pertype-k15-chiral-nofacets`), which separates "chiral from birth" from "facets" — if it
+lands near the old row at the old footprint, facets are the entire cost and none of the gain
+on this benchmark.
+
+## 2026-09-22 — Laya as a System-1 reflex: two pre-registered calibrations, both losses
+
+Laya (`NandhaKishorM/laya` 0.3.6, Apache-2) answers typed questions — `choice`/`score`/`noul`
+— in one non-autoregressive forward pass, calibrated by RL against proper scoring rules. The
+proposal (a "Reflex organ" that weights, routes or gates but never generates) is worth
+nothing until the off-the-shelf checkpoint is calibrated on a case whose answer we know.
+Decision rules were fixed before the run in `experiments/laya_reflex/README.md`; raw outputs
+in `experiments/laya_reflex/results/`. Host: debain2 CPU (20 cores), the bench running alongside.
+
+**E-L1 evidence gate.** For the 30 standard questions, one `noul` per top-15 candidate the
+medium actually retrieved (450 decisions): *does the excerpt contain information needed to
+answer the question?* Ground truth: LongMemEval turn-level `has_answer` (43 positives, 9.6%).
+
+| AUROC | Brier | Brier of "always no" | ECE | precision @0.5 | recall @0.5 | latency median / p95 |
+|---|---|---|---|---|---|---|
+| **0.750** | 0.092 | 0.096 | 0.057 | 0.25 | 0.19 | 507 ms / 3.2 s |
+
+Rule was AUROC ≥ 0.85 and Brier ≤ 0.15 to become a gate, 0.75–0.85 to fine-tune first, below
+0.75 a loss. It landed at 0.7496 — a loss by the letter, and by the substance: Brier is a
+wash against predicting "no" for everything, and at p ≥ 0.5 it finds 8 of 43 evidence turns
+while flagging 24 non-evidence ones. The ranking has some signal (AUROC 0.75) but the
+probabilities do not, on this domain.
+
+**E-L2 question routing from the question text alone** (all 500 questions, `choice` over
+the six types; rule: ≥ 0.80 to replace the gold-label routing in the answer stage):
+**accuracy 0.314** (chance 0.167). It answers `single-session-user` for 348 of 500 questions —
+every type's plurality prediction is the first criterion listed. `single-session-assistant`
+0/56, `knowledge-update` 4/78. A loss; the answer stage keeps its leak-free un-routed baseline.
+
+**Latency, the honest System-1 number:** 267 ms median for a question-only state on a free
+20-core box, 507 ms with a 512-token excerpt, 2.4 s while the bench shared the box. The
+README's 33 ms is a T4 figure. On CPU this is a dream-time or membrane-time reflex, not a
+per-hit recall gate.
+
+**What survives:** the fine-tuning path. LongMemEval gives ~7 500 turn-level evidence labels
+on the 470 questions outside the standard 30, and Laya ships the typed-decisions fine-tune
+notebook; that run needs a GPU (qBraid) and is the next Laya experiment, E-L1b, with the same
+decision rule on the held-out 30. Nothing here touches a store.
