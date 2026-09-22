@@ -32,13 +32,18 @@ Config notes, each one a bug found while wiring this up:
     architecture and not about embeddings.
   * qdrant is pointed at an on-disk path under the run dir. The bench opens one
     store PER QUESTION; a shared server would leak memories between questions.
-  * ⚠⚠ ONE MEM0 RUN PER BOX. Besides the per-store qdrant configured here,
-    mem0 opens a GLOBAL embedded qdrant at ~/.mem0/migrations_qdrant, and
-    embedded qdrant takes an exclusive lock on its folder. A second bench
+  * ⚠⚠ ONE MEM0 RUN PER **HOME**. Besides the per-store qdrant configured
+    here, mem0 opens a GLOBAL embedded qdrant at ~/.mem0/migrations_qdrant,
+    and embedded qdrant takes an exclusive lock on its folder. A second bench
     process — even one pointed at a different --out — dies with "Storage
     folder ... is already accessed by another instance of Qdrant client", and
     the bench records it as a per-question `error` row rather than a crash,
     so it looks like an adapter fault instead of contention.
+    **Giving each worker its own `HOME` lifts this** — VERIFIED 2026-09-21,
+    6 concurrent workers, zero lock errors. ⚠ But `HOME` is load-bearing for
+    more than mem0: it also relocates `pip install --user` site-packages and
+    every `~`-relative path, so a worker launched that way needs `PYTHONPATH`
+    and any repo root passed absolutely. Both bit this calibration.
   * Extraction runs on a FREE LOCAL model (qwen2.5:7b via ollama), not on the
     Claude gateway. MEASURED: Claude cost $0.019/turn — $20 bought ~1,034 turns
     (two questions), and a full 30-question run would be ~$280. Report the
@@ -71,6 +76,7 @@ class Mem0Adapter(Adapter):
         self.llm_calls = 0
         self.dropped_turns = 0
         self.ingest_errors = 0
+        self.ingest_retries = 0
 
     # -- config ---------------------------------------------------------
     def _config(self, store: str) -> dict:
@@ -120,7 +126,7 @@ class Mem0Adapter(Adapter):
         if os.path.isdir(self.dir):
             shutil.rmtree(self.dir, ignore_errors=True)
         os.makedirs(self.dir, exist_ok=True)
-        self.llm_calls = self.dropped_turns = self.ingest_errors = 0
+        self.llm_calls = self.dropped_turns = self.ingest_errors = self.ingest_retries = 0
         self.m = Memory.from_config(self._config(self.dir))
 
     # -- ingest ---------------------------------------------------------
@@ -135,21 +141,45 @@ class Mem0Adapter(Adapter):
                     meta["when"] = it.when.astimezone(timezone.utc).isoformat()
                 except (AttributeError, ValueError):
                     pass
-            try:
-                r = self.m.add([{"role": "user", "content": text[:4000]}],
-                               user_id=USER, metadata=meta)
-                self.llm_calls += 1
-                got = r.get("results", []) if isinstance(r, dict) else (r or [])
-                if not got:
-                    # Extraction found nothing worth keeping. Not an error, but
-                    # this turn can never be recalled, so it is counted.
-                    self.dropped_turns += 1
-            except Exception as e:  # noqa: BLE001
+            # One retry. MEASURED on a 4090 2026-09-21: ~4% of turns
+            # (13 of 300 across three runs) die inside mem0 with
+            # `AttributeError: 'str' object has no attribute 'get'` — the
+            # extractor returned JSON that parsed to a str where mem0 expects
+            # a dict, and mem0 has no guard. Extraction is sampled, so the
+            # same turn usually succeeds on a second attempt.
+            #
+            # This is a FAIRNESS fix, not a cosmetic one. A turn lost at
+            # ingest can never be recalled, so 4% loss is 4% of the gold
+            # evidence deleted before ranking is even tested — it would show
+            # up in our table as Mem0 ranking badly when in fact our harness
+            # threw the turn away. Retries are counted separately so the
+            # instability stays visible instead of being papered over.
+            err = None
+            for attempt in (1, 2):
+                try:
+                    r = self.m.add([{"role": "user", "content": text[:4000]}],
+                                   user_id=USER, metadata=meta)
+                    self.llm_calls += 1
+                    if attempt == 2:
+                        self.ingest_retries += 1
+                    got = r.get("results", []) if isinstance(r, dict) else (r or [])
+                    if not got:
+                        # Extraction found nothing worth keeping. Not an error,
+                        # but this turn can never be recalled, so it is counted.
+                        self.dropped_turns += 1
+                    err = None
+                    break
+                except Exception as e:  # noqa: BLE001
+                    err = e
+                    self.llm_calls += 1   # the call was spent either way
+            if err is not None:
                 # One bad turn must not lose the question, but a silent skip
-                # would understate ingest loss — count and say so.
+                # would understate ingest loss — count and say so. The message
+                # is NOT truncated to 140 chars: that truncation once hid an
+                # out-of-credit error behind `{"type":"error","error":{"type`.
                 self.ingest_errors += 1
                 if self.ingest_errors <= 3:
-                    print(f"[mem0] add failed for {it.id}: {type(e).__name__}: {str(e)[:140]}",
+                    print(f"[mem0] add failed twice for {it.id}: {type(err).__name__}: {err}",
                           file=sys.stderr, flush=True)
 
     # -- recall ---------------------------------------------------------
@@ -185,7 +215,8 @@ class Mem0Adapter(Adapter):
         """
         return {"llm_calls": self.llm_calls,
                 "dropped_turns": self.dropped_turns,
-                "ingest_errors": self.ingest_errors}
+                "ingest_errors": self.ingest_errors,
+                "ingest_retries": self.ingest_retries}
 
     def footprint_bytes(self) -> int:
         return dir_bytes(self.dir) if self.dir else 0
