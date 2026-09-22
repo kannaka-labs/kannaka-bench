@@ -732,3 +732,72 @@ per-hit recall gate.
 on the 470 questions outside the standard 30, and Laya ships the typed-decisions fine-tune
 notebook; that run needs a GPU (qBraid) and is the next Laya experiment, E-L1b, with the same
 decision rule on the held-out 30. Nothing here touches a store.
+
+## 2026-09-22 — Facets off on the chiral path: the loss was facets, all of it
+
+Third arm, same 30 questions, same binary, `KANNAKA_FACET_DECOMPOSE=0`
+(`s-5pertype-k15-chiral-nofacets`):
+
+| run | hit@15 | recall@15 | evid@15 | MRR | recall p50 | p95 | ingest ms/item | bytes/item |
+|---|---|---|---|---|---|---|---|---|
+| `postflip-k15` — flat (the old published row) | 1.000 | 0.950 | 0.848 | 0.918 | 2 838 ms | 4 304 | 376 | 42 KB |
+| chiral, facets on | 0.967 | 0.958 | 0.804 | 0.919 | 4 036 ms | 4 823 | 255 | 185 KB |
+| **chiral, facets off** | **1.000** | **0.950** | **0.848** | **0.918** | **1 024 ms** | **1 146** | **98** | **46 KB** |
+
+The facets-off chiral row reproduces the old flat row's retrieval **exactly** — every one of
+the 30 evidence-coverage values is identical — at **2.8× lower recall latency**, **3.8× lower
+ingest cost** and the old footprint. So on this benchmark:
+
+- **Chiral-from-birth is a pure win**: same ranking as the flat medium, much cheaper on both
+  paths (the flat medium paid O(n) interference per insert and converted itself on every
+  load). This is the row the standard setting should carry from now on.
+- **Facets are the entire cost and none of the gain**: +4.5 s p50 → 4.0 s, 4× disk, and
+  retrieval within noise of no facets, slightly down. #925's "facets are a third of recall"
+  was measured on a different store and corpus; here the parent rows already carry the
+  turn-level evidence, so minted fragments only add rows to resonate through.
+- The kannaka-memory binary defaults `KANNAKA_FACET_DECOMPOSE` to OFF; the bench adapter
+  defaulted it to ON, and the fleet (KAX machines, rogue agents) runs it ON. The adapter
+  default flips to OFF with this entry, so the standard row is the shipped default. Whether
+  the fleet should keep facets on is a question for a corpus where facets can matter (short
+  compound notes, not chat turns) — not answered here.
+
+Honest standard row for `kannaka_minilm`, longmemeval_s, k=15: **1.000 / 0.950 / 0.848 /
+0.918, p50 1.0 s, 98 ms/item, 46 KB/item.**
+
+## 2026-09-22 — E-L1b: the fine-tuned reflex passes its rule (held-out AUROC 0.963)
+
+Fine-tuned `convaiinnovations/laya` (English, ModernBERT-large) on Kannaka's evidence-gate
+decision with `experiments/laya_reflex/train_e_l1b.py` — upstream's RLCD recipe (zero-mean
+noisy-logit groups scored by proper scoring rules + soft cross-entropy) reduced to one GPU.
+Training data from `build_e_l1b_dataset.py`: **4,180 (question, turn) rows from the 470
+questions outside the standard 30** — 836 positive turns (`has_answer`), 3,344 negatives, of
+which 3,320 are hard (same session as a positive). **The 30 standard questions were held out
+entirely**; the test set is E-L1's identical 450 decisions over the medium's own top-15
+candidates. qBraid RTX 4090, 4 epochs, 390 s, ~5 steps/s; ≈ 40 credits (≈ $0.40) for the
+instance including both evaluations.
+
+| model | AUROC | Brier | ECE | precision @0.5 | recall @0.5 | latency / decision (4090) |
+|---|---|---|---|---|---|---|
+| Laya off the shelf, CPU (E-L1) | 0.750 | 0.092 | 0.057 | 0.25 | 0.19 | 507 ms (CPU) |
+| Laya off the shelf, same GPU (control) | 0.748 | 0.092 | 0.057 | 0.25 | 0.19 | 20.6 ms |
+| **Laya fine-tuned (E-L1b), held-out** | **0.963** | **0.066** | 0.066 | **0.59** | **0.95** | **20.6 ms** |
+
+The GPU control reproduces E-L1 to the third decimal, so the pipeline measures what it says
+it measures; the fine-tune moves AUROC by +0.21 on questions it never saw. Pre-registered rule
+was AUROC ≥ 0.85 and Brier ≤ 0.15: **passed**. At p ≥ 0.5 it keeps 41 of the 43 evidence turns
+and flags 69 of 450 candidates in total — as a gate it would hand the answer stage ~2.3 rows
+per question instead of 15 while keeping 95% of the evidence.
+
+What this does and does not show:
+- It shows a **memory substrate can train its own reflex from labels it already has**, in
+  seven minutes, for under a dollar, and that the reflex runs at 20 ms on a consumer GPU.
+- It does not show the gate improves *answers*: that is the next bench run (answer stage over
+  the gated rows vs plain top-15, accuracy and tokens per question, same 30 questions).
+- n = 43 positives; the AUROC's standard error is roughly ±0.03. Fine-tuned noul temperature
+  came out at 4.98 (heavily softened), which is why ECE stayed flat while Brier improved.
+- Negatives were sampled per question from the same haystack, so the model has not seen
+  cross-question distractors the way a production store would present them.
+
+The fine-tuned agent directory (`model.safetensors`, `encoder/`, `tokenizer/`,
+`rl_agent_config.json`, `train_meta.json`) is in Laya's layout and is what upstream's notebook
+pushes to the Hub — publication under kannaka-labs is one call with a token.
