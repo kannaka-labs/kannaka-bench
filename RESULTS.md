@@ -861,3 +861,43 @@ lean on the gate less. None of these is claimed; each is a run.
 Cost: the second RTX 4090 pod for the answer model, about 50 minutes including the ollama
 install and a 9 GB pull, ≈ 45 qBraid credits (≈ $0.45). Raw rows in
 `experiments/laya_reflex/results/e_l1c_*`.
+
+## 2026-09-23 — E-L3: supersession at write time — the base model is worse than chance, the fine-tune passes
+
+Kannaka carries a temporal triple on every memory and nothing ever fills `expires_at`: no code
+path decides that a new memory *replaces* an old one. LongMemEval-S knowledge-update questions
+happen to label exactly that decision — each marks the turn where a fact was stated and the
+later turn where it changed. `experiments/laya_reflex/e_l3_supersession.py` turns the 68 clean
+questions into 68 positive pairs (old evidence turn, new evidence turn) and 272 hard negatives
+(another turn from the *same conversation* as the old fact, paired with the same new turn),
+all in true chronological order so date alone separates nothing. Twenty questions held out
+(the 5 in the standard set plus 15); 17 of them are clean, so the held-out set is 85 pairs.
+Rules were fixed in the README before the run.
+
+| model | set | n (pos) | AUROC | Brier | always-no Brier | P @0.5 | R @0.5 | ms / decision |
+|---|---|---|---|---|---|---|---|---|
+| Laya off the shelf | all 340 | 340 (68) | **0.443** | 0.191 | 0.200 | 0.06 | 0.01 | 417 (CPU) |
+| Laya off the shelf | held-out | 85 (17) | 0.359 | 0.210 | 0.200 | 0.14 | 0.06 | 24.8 (5090) |
+| **Laya fine-tuned (E-L3b)** | **held-out** | 85 (17) | **0.929** | **0.039** | 0.200 | **0.94** | **0.88** | 24.8 (5090) |
+| Laya fine-tuned (E-L3b) | train (overfit check) | 255 (51) | 0.998 | 0.004 | 0.200 | 0.98 | 1.00 | 26 |
+
+- **E-L3a, the control:** the base checkpoint is *below chance* on this decision — it has some
+  systematic idea of "update" and it is the wrong one. Brier equals always-no. Nothing to
+  calibrate; the decision has to be learned.
+- **E-L3b: rule passed** (AUROC ≥ 0.85, Brier ≤ 0.15, recall ≥ 0.80): 0.929 / 0.039 / 0.88, and
+  precision 0.94 — it stamps almost nothing wrongly, which is the property a reflex that writes
+  `expires_at` needs most. 255 rows, 42 seconds on an RTX 5090, a few cents.
+- **Read the n.** Seventeen held-out positives put the AUROC at roughly 0.93 ± 0.06. The train-set
+  row shows the model memorised its rows, as expected at this size; the held-out row is the
+  only one that counts. Negatives are same-conversation; a real store also presents topically
+  similar memories from other days, untested here.
+- Two reflexes trained now, each in under seven minutes, each from labels the benchmark
+  already carried, each passing a rule written before the run. That is the pattern worth
+  formalising: **the substrate trains its own System 1 from its own evaluation data.**
+
+Model: `flaukowski/laya-kannaka-supersession` on the Hub. Raw outputs in
+`experiments/laya_reflex/results/e_l3_*` and `decisions_*`.
+
+**E-L3c (pre-registered, next):** the ingest arm — at write time, recall the top-5 from the
+store so far, ask the reflex per candidate, stamp `expires_at` on a candidate at p ≥ 0.5, and
+measure knowledge-update retrieval and answers against the standard row.
