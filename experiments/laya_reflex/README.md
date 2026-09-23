@@ -85,7 +85,14 @@ held-out 85) — below chance, Brier = always-no. **E-L3b fine-tuned: held-out A
 positives, so ±0.06). Train-set 0.998 (memorised, as 255 rows in 42 s would be). Model:
 `flaukowski/laya-kannaka-supersession`. Files: `results/e_l3_*`, `results/decisions_*`.
 
-- **E-L3c (E-L3b passed, so it runs next):** ingest arm — at write time, recall the top-5 from the
+**E-L3c outcome (2026-09-23): loss.** Pre-pass stamped 397 of 8,068 turns (found 13/17 true
+supersessions, expired 0/17 current facts); answers on qwen2.5:14b: plain **0.765** (13/17) vs
+supersede+drop **0.588** (10/17) - two flips for (the 5K time, the textbook case), five against,
+one an instrument fault (`--top-k 30` returned 0 rows). Cause: precision collapses at the write
+path's 1:2,300 prior. Next: E-L3d (cross-topic negatives, gate p >= 0.99 + same speaker + cosine
+floor). Files: `results/e_l3c/`.
+
+- **E-L3c (as run):** ingest arm — at write time, recall the top-5 from the
   store so far, ask the reflex per candidate, stamp `expires_at` on a candidate at p ≥ 0.5;
   measure knowledge-update retrieval and answers against the standard row.
 

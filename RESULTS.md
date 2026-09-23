@@ -901,3 +901,61 @@ Model: `flaukowski/laya-kannaka-supersession` on the Hub. Raw outputs in
 **E-L3c (pre-registered, next):** the ingest arm — at write time, recall the top-5 from the
 store so far, ask the reflex per candidate, stamp `expires_at` on a candidate at p ≥ 0.5, and
 measure knowledge-update retrieval and answers against the standard row.
+
+## 2026-09-23 — E-L3c: stamping supersession at ingest — a loss with the textbook win inside it
+
+The ingest arm the E-L3b pass unlocked. For each of the 17 held-out knowledge-update questions,
+walk the haystack in time order; for every turn, take the 5 most similar earlier turns (MiniLM
+cosine, the shortlist a write-time recall would produce) and ask the fine-tuned supersession
+reflex; at P(yes) ≥ 0.5 the earlier turn gets `expires` = the later turn's timestamp
+(`e_l3c_supersede.py`, RTX 5090, 39,400 pairs in 1,122 s). The kannaka adapter stamps `expires`
+on those items at ingest and, with `BENCH_DROP_EXPIRED=1`, over-fetches 2k and drops any hit
+that expired before the question was asked — the rule kannaka-memory does not apply itself yet
+(kannaka-memory #1044). Both arms: chiral, facets off, k=15; answers on qwen2.5:14b (the
+Anthropic key is still capped), same judge, same day.
+
+**What the pre-pass did:** 397 of 8,068 turns stamped (4.9%), P(yes) median 1.00. It found
+**13 of the 17 true superseded facts** and expired **none** of the 17 current ones. The other
+~380 stamps are, by construction, mostly false positives: there are 17 true supersessions among
+39,400 shortlist pairs (0.04%), and a classifier trained at a 20% prior on same-conversation
+negatives keeps its 0.94 precision only at that prior.
+
+| arm | hit@15 | recall@15 | evid@15 | answer accuracy (qwen2.5:14b) |
+|---|---|---|---|---|
+| plain | 0.941 | 0.941 | 0.912 | **0.765** (13 / 17) |
+| supersede + drop | 0.882 | 0.882 | 0.559 | 0.588 (10 / 17) |
+
+Retrieval metrics cannot judge this arm: LongMemEval labels *both* the old and the new fact as
+evidence, so dropping the superseded one halves evidence coverage by design. The answer column
+is the measurement, and it is a loss: seven flips, two for, five against.
+
+```
+6a1eabeb  0 -> 1   personal-best 5K: plain answered 27:12 (the OLD time), supersede answered 25:50. The case.
+01493427  0 -> 1   postcards count
+031748ae  1 -> 0   lost the context that dated the role change
+07741c45  1 -> 0   same answer text, judged wrong on the detail it dropped
+0f05491a  1 -> 0   stars count: chose the wrong revision
+6aeb4375  1 -> 0   "four Korean restaurants" -> answered three (the OLD count) after a false-positive stamp
+06db6396  1 -> 0   INSTRUMENT: recall returned 0 rows at --top-k 30 (fine at 16); counted as a miss, not excused
+```
+
+Reading it:
+- **The mechanism works where it is right.** The 5K question is the exact failure that
+  motivated E-L3: the plain arm quoted the superseded time, the stamped arm quoted the current
+  one.
+- **It loses on precision at the true base rate.** With ~380 false stamps, real context goes
+  missing (the drop fires on the current fact's *neighbours*, and one question flipped to the
+  old count because a later unrelated turn "superseded" the update). A reflex validated on
+  same-conversation negatives at a 1:4 prior is not the reflex the write path needs, which faces
+  cross-topic pairs at a 1:2,300 prior.
+- Excerpt counts went *up* under the drop (16 → 18, 22 → 26): the over-fetch back-filled the
+  freed slots with lower-ranked rows, so the answer model saw more, not less, and did worse.
+
+**Next, in order (each a run, none claimed):** E-L3d — train with negatives drawn at the write
+path's own distribution (cross-topic shortlist pairs, roughly 1:2,300), gate on p ≥ 0.99 *and*
+same speaker *and* a cosine floor, and re-measure; then the kannaka-memory #1044 path so the rule
+lives in recall, not the harness. The instrument fault (0 rows at `--top-k 30`) gets its own
+kannaka-memory issue.
+
+Raw rows in `experiments/laya_reflex/results/e_l3c/` (the supersede map, both retrieval runs,
+both answer runs).
