@@ -151,6 +151,8 @@ def main(argv=None):
                     help="stores with more items than this are skipped (error row) for --max-items-adapters; 0 = no cap")
     ap.add_argument("--max-items-adapters", default="kannaka,kannaka_minilm",
                     help="comma list of adapters the --max-items cap applies to")
+    ap.add_argument("--question-ids", default=None,
+                    help="file with one question_id per line: run exactly these questions (E-L3c's held-out set)")
     ap.add_argument("--resume", action="store_true",
                     help="keep the run dir's existing non-error rows and skip those (adapter, question) pairs")
     a = ap.parse_args(argv)
@@ -172,6 +174,10 @@ def main(argv=None):
     else:
         from .datasets import longmemeval
         qs, dsmeta = longmemeval.load(a.dataset, limit=a.limit)
+        if a.question_ids:
+            keep = {l.strip() for l in open(a.question_ids, encoding="utf-8") if l.strip()}
+            qs = [q for q in qs if q.id in keep]
+            print(f"[run] --question-ids: {len(qs)} of {len(keep)} requested questions found", flush=True)
         stores = [(q.id, q.items, [q], "session") for q in qs]
 
     adapters = {n: make_adapter(n) for n in names}
