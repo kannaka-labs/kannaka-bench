@@ -81,7 +81,7 @@ def main(argv=None):
     print(f"--- trace ({len(trace)} lines):")
     for l in trace[:60]:
         print("  " + l[:170])
-    final = [l for l in r.stdout.splitlines() if l.strip().startswith("[")]
+    final = [l for l in r.stdout.split("\n") if l.strip().startswith("[")]
     if final:
         hits = json.loads(final[-1])
         print("--- final top-k (content, similarity):")

@@ -141,7 +141,7 @@ class KannakaAdapter(Adapter):
         rc, out, err = self._batch_run(["remember", "--batch", path], max(self.timeout_s, 2.0 * len(items) + 60))
         if "unknown flag" in err and "--batch" in err:
             return False
-        ids = [l.strip() for l in out.splitlines() if l.strip()]
+        ids = [l.strip() for l in out.split("\n") if l.strip()]
         if rc not in (0, 1) or len(ids) != len(items):
             raise RuntimeError(f"kannaka remember --batch: rc={rc}, {len(ids)} lines for {len(items)} items: "
                                f"{err.strip()[:200]}")
@@ -167,7 +167,7 @@ class KannakaAdapter(Adapter):
                 args += ["--observed", iso, "--effective", iso]
             out = self._run(args)
             kid = None
-            for line in reversed(out.strip().splitlines()):
+            for line in reversed(out.strip().split("\n")):
                 line = line.strip()
                 if len(line) == 36 and line.count("-") == 4:
                     kid = line
@@ -221,7 +221,7 @@ class KannakaAdapter(Adapter):
             rc, stdout, err = self._batch_run(["recall", "--batch", path], max(self.timeout_s, 1.0 * len(queries) + 60))
             if not ("unknown flag" in err and "--batch" in err) and rc == 0:
                 out = []
-                for line in stdout.splitlines():
+                for line in stdout.split("\n"):
                     line = line.strip()
                     if line.startswith("["):
                         try:
@@ -262,9 +262,11 @@ class KannakaAdapter(Adapter):
         # question per store — so the drop has to live here, not only in
         # recall_many; the first E-L3c retrieval arms were identical because
         # it did not.)
-        # kannaka-memory #1045: one store returned NO rows at --top-k 30 while 16 was
-        # fine, so over-fetch modestly (k+5) and, if the array comes back empty,
-        # retry once at plain k rather than record a phantom miss.
+        # Over-fetch modestly (k+5) so k survive the drop. The retry below is a
+        # guard only: the "no rows at --top-k 30" that kannaka-memory #1045 blamed on
+        # the binary was THIS parser splitting the JSON line at a U+2028 inside a
+        # memory's content (Python's splitlines() honours it; serde_json emits it
+        # raw). Rows are split on "\n" only now; see the regression test.
         fetch = k + 5 if self.drop_expired else k
         args = ["recall", query[:1000], "--top-k", str(fetch)]
         if self.supports_at is not False:
@@ -287,7 +289,9 @@ class KannakaAdapter(Adapter):
             if self.supports_at is None and when is not None:
                 self.supports_at = True
         hits = []
-        for line in reversed(out.strip().splitlines()):
+        # split("\n"), never splitlines(): a JSON line is one line even when a
+        # memory's text carries U+2028/U+2029/NEL (LongMemEval's ShareGPT turns do).
+        for line in reversed(out.strip().split("\n")):
             line = line.strip()
             if line.startswith("["):
                 try:
@@ -307,7 +311,7 @@ class KannakaAdapter(Adapter):
                                           text=(r.get("content") or "")[:200]))
                 break
         if not hits and fetch != k:
-            print(f"[kannaka] recall returned no rows at --top-k {fetch}; retrying at {k} (kannaka-memory #1045)",
+            print(f"[kannaka] recall returned no rows at --top-k {fetch}; retrying at {k}",
                   file=sys.stderr)
             saved, self.drop_expired = self.drop_expired, False
             try:

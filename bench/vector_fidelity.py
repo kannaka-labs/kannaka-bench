@@ -48,7 +48,7 @@ def main(argv=None):
     env = dict(os.environ, KANNAKA_DATA_DIR=store, KANNAKA_NATS_URL="nats://127.0.0.1:1", KANNAKA_ENCODER="ollama",
                KANNAKA_ENCODER_URL=a.embed_url, KANNAKA_ENCODER_MODEL="all-minilm", KANNAKA_ENCODER_DIM="384")
     r = subprocess.run([a.bin, "export-json"], env=env, capture_output=True, text=True, timeout=600, encoding="utf-8", errors="replace")
-    line = next((l for l in r.stdout.splitlines() if l.strip().startswith("[")), "[]")
+    line = next((l for l in r.stdout.split("\n") if l.strip().startswith("[")), "[]")
     mems = json.loads(line)
     print(f"store {store}: {len(mems)} memories exported")
     rows = [m for m in mems if m.get("vector") and (m.get("content") or "").strip()]

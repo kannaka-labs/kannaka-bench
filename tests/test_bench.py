@@ -120,6 +120,29 @@ def test_kannaka_adapter_parses_and_stays_off_the_swarm():
         assert hits[0].score == 0.9
 
 
+def test_kannaka_adapter_keeps_a_json_line_whole_across_u2028():
+    """kannaka-memory #1045 was this parser, not the binary: a memory whose text carries
+    U+2028 (LINE SEPARATOR; present in LongMemEval's ShareGPT turns) is emitted raw by
+    serde_json, and Python's str.splitlines() splits the JSON array there, so every
+    --top-k that reached that row parsed as ZERO hits. One store, k>=17, every time."""
+    with tempfile.TemporaryDirectory() as d:
+        a = kad.KannakaAdapter(bin_path="kannaka-stub")
+        a.batch = "0"
+        a.open(d)
+        a.by_kid["11111111-2222-3333-4444-555555555555"] = "s_1#0"
+        a.by_kid["22222222-2222-3333-4444-555555555555"] = "s_2#0"
+        array = ('[{"id":"11111111-2222-3333-4444-555555555555","content":"grateful to learn and grow.  I still have","similarity":0.9},'
+                 '{"id":"22222222-2222-3333-4444-555555555555","content":"next line  and NEL too","similarity":0.5}]')
+        assert len(array.splitlines()) == 4          # the trap, stated
+        a._run = lambda args: "HrmStore initialized with 2 memories\n" + array + "\n"
+        hits = a.recall("what did I learn", 5)
+        assert [h.id for h in hits] == ["s_1#0", "s_2#0"]
+        # the batch path reads the same shape
+        a._batch_run = lambda args, timeout: (0, array + "\n" + array + "\n", "")
+        many = a.recall_many(["q1", "q2"], 5)
+        assert [[h.id for h in hs] for hs in many] == [["s_1#0", "s_2#0"], ["s_1#0", "s_2#0"]]
+
+
 def test_kannaka_minilm_adapter_sets_the_encoder():
     with tempfile.TemporaryDirectory() as d:
         a = kad.KannakaMinilmAdapter(bin_path="kannaka-stub")
