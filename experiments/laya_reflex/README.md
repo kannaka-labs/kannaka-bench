@@ -92,6 +92,13 @@ one an instrument fault (`--top-k 30` returned 0 rows). Cause: precision collaps
 path's 1:2,300 prior. Next: E-L3d (cross-topic negatives, gate p >= 0.99 + same speaker + cosine
 floor). Files: `results/e_l3c/`.
 
+**E-L3d outcome (2026-09-23): +1 at zero collateral.** Reflex retrained on the write path's own
+shortlist pairs (`build_e_l3d_dataset.py`, 2,346 rows; 19/51 true pairs were outside the top-5
+shortlist). Held-out pair AUROC 0.939. Gates A/B/C stamp 42/30/15 (29/18/8 false), all three
+answer **0.824** (14/17) vs plain 0.765 vs E-L3c 0.588; the one gain is a different question and
+the 5K flagship case is still missed. Carry gate A. Next: k=10/20 shortlist, union negatives,
+kannaka-memory #1044. Files: `results/e_l3d/`.
+
 - **E-L3c (as run):** ingest arm — at write time, recall the top-5 from the
   store so far, ask the reflex per candidate, stamp `expires_at` on a candidate at p ≥ 0.5;
   measure knowledge-update retrieval and answers against the standard row.

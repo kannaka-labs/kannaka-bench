@@ -40,6 +40,11 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--threshold", type=float, default=0.5)
+    # E-L3d gates (all off by default so E-L3c stays reproducible): a probability floor,
+    # same speaker on both sides (a user's fact is superseded by the user, not the assistant),
+    # and a cosine floor on the shortlist pair.
+    ap.add_argument("--same-speaker", action="store_true")
+    ap.add_argument("--min-cos", type=float, default=0.0)
     ap.add_argument("--cap", type=int, default=1500)
     ap.add_argument("--out", required=True)
     ap.add_argument("--embed-model", default="sentence-transformers/all-MiniLM-L6-v2")
@@ -74,9 +79,16 @@ def main():
             if not earlier_idx:
                 continue
             sims = vecs[earlier_idx] @ vecs[j]
-            top = [earlier_idx[i] for i in np.argsort(-sims)[: args.k]]
-            for i in top:
+            order = np.argsort(-sims)[: args.k]
+            top = [(earlier_idx[i], float(sims[i])) for i in order]
+            for i, cos in top:
                 earlier = items[i]
+                if cos < args.min_cos:
+                    stats["skipped_cos"] = stats.get("skipped_cos", 0) + 1
+                    continue
+                if args.same_speaker and earlier["text"].split(":", 1)[0] != later["text"].split(":", 1)[0]:
+                    stats["skipped_speaker"] = stats.get("skipped_speaker", 0) + 1
+                    continue
                 res = agent.predict({"earlier": f"[{earlier['date_str']}] {earlier['text']}"[: args.cap],
                                      "later": f"[{later['date_str']}] {later['text']}"[: args.cap]}, Q)
                 p = float(res["answers"]["supersedes"]["noul"])
@@ -87,7 +99,7 @@ def main():
                     if prev is None or later["when"] < parse_date(prev["expires_src"]):
                         supersede[earlier["id"]] = {"expires": later["when"].strftime("%Y-%m-%dT%H:%M:%SZ"),
                                                     "expires_src": later["date_str"], "by": later["id"], "p": round(p, 4),
-                                                    "question_id": q["question_id"]}
+                                                    "cos": round(cos, 4), "question_id": q["question_id"]}
                         stats["stamped"] += 1
         print(f"[{qi + 1}/{len(data)}] {q['question_id']} items={len(items)} pairs so far={stats['pairs']} "
               f"stamped={len(supersede)} {time.time() - t0:.0f}s", flush=True)
