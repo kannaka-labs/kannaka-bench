@@ -39,6 +39,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--holdout-results", required=True)
+    ap.add_argument("--holdout-ids", default=None, help="E-L3g: file of question ids to hold out (one per line); overrides the standard-run hold-out")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--neg-per-pos", type=int, default=40)
@@ -58,6 +59,8 @@ def main():
     std_ku = sorted(q["question_id"] for q in ku if q["question_id"] in std)
     rest = sorted(q["question_id"] for q in ku if q["question_id"] not in std)
     held = set(std_ku + rest[:20 - len(std_ku)])   # identical hold-out to E-L3/E-L3c
+    if args.holdout_ids:
+        held = {l.strip() for l in open(args.holdout_ids) if l.strip()}
 
     rows, stats = [], Counter()
     for q in ku:
