@@ -212,8 +212,8 @@ class KannakaAdapter(Adapter):
             path = os.path.join(self.dir, "queries.ndjson")
             with open(path, "w", encoding="utf-8") as f:
                 for q, w in zip(queries, whens):
-                    # over-fetch when expired rows may be dropped, so k survive
-                    row = {"query": q[:1000], "top_k": k * 2 if self.drop_expired else k}
+                    # over-fetch when expired rows may be dropped, so k survive (k+5, see #1045)
+                    row = {"query": q[:1000], "top_k": k + 5 if self.drop_expired else k}
                     at = self._at_args(w)
                     if at:
                         row["at"] = at[1]
@@ -262,7 +262,10 @@ class KannakaAdapter(Adapter):
         # question per store — so the drop has to live here, not only in
         # recall_many; the first E-L3c retrieval arms were identical because
         # it did not.)
-        fetch = k * 2 if self.drop_expired else k
+        # kannaka-memory #1045: one store returned NO rows at --top-k 30 while 16 was
+        # fine, so over-fetch modestly (k+5) and, if the array comes back empty,
+        # retry once at plain k rather than record a phantom miss.
+        fetch = k + 5 if self.drop_expired else k
         args = ["recall", query[:1000], "--top-k", str(fetch)]
         if self.supports_at is not False:
             args += self._at_args(when)
@@ -303,6 +306,15 @@ class KannakaAdapter(Adapter):
                     hits.append(RecallHit(id=iid, score=float(r.get("similarity") or 0.0),
                                           text=(r.get("content") or "")[:200]))
                 break
+        if not hits and fetch != k:
+            print(f"[kannaka] recall returned no rows at --top-k {fetch}; retrying at {k} (kannaka-memory #1045)",
+                  file=sys.stderr)
+            saved, self.drop_expired = self.drop_expired, False
+            try:
+                hits = self.recall(query, k, when)
+            finally:
+                self.drop_expired = saved
+            return [h for h in hits if not self._expired(h.id, when)][:k]
         return hits[:k]
 
     def _memory_count(self):
