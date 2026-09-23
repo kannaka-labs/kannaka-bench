@@ -18,7 +18,7 @@ import os
 import time
 import subprocess
 import sys
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import Iterable
 
 from .base import Adapter, MemoryItem, RecallHit, dir_bytes
@@ -39,6 +39,18 @@ class KannakaAdapter(Adapter):
         self.version = None
         self.batch = os.environ.get("KANNAKA_BATCH", "auto")   # auto | 1 | 0
         self.batch_ok = None                                    # learned on first use
+        # E-L3c: a JSON map item_id -> {"expires": iso, ...} produced by
+        # experiments/laya_reflex/e_l3c_supersede.py. At ingest every mapped item
+        # gets `expires`; with BENCH_DROP_EXPIRED=1 recall drops hits whose
+        # expires <= the question's asked_at (the rule kannaka-memory does not
+        # apply itself yet; see the E-L3c entry in RESULTS.md).
+        self.supersede: dict = {}
+        m = os.environ.get("BENCH_SUPERSEDE_MAP")
+        if m:
+            with open(m, encoding="utf-8") as f:
+                self.supersede = json.load(f).get("map", {})
+        self.drop_expired = os.environ.get("BENCH_DROP_EXPIRED", "0") == "1"
+        self.expires_of: dict = {}   # item id -> aware datetime, for the recall-time filter
 
     #: `[beam] scored 512 of 1671 memories (30.6%) -> 5 results`
     _BEAM_RE = re.compile(r"\[beam\] scored (\d+) of (\d+) memories")
@@ -121,6 +133,10 @@ class KannakaAdapter(Adapter):
                     iso = it.when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                     row["observed"] = iso
                     row["effective"] = iso
+                sup = self.supersede.get(it.id)
+                if sup:
+                    row["expires"] = sup["expires"]
+                    self.expires_of[it.id] = datetime.strptime(sup["expires"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
         rc, out, err = self._batch_run(["remember", "--batch", path], max(self.timeout_s, 2.0 * len(items) + 60))
         if "unknown flag" in err and "--batch" in err:
@@ -160,13 +176,28 @@ class KannakaAdapter(Adapter):
                 self.by_kid[kid] = it.id
             self.text_of[it.id] = it.text
 
-    def _parse_rows(self, rows, k: int) -> list[RecallHit]:
+    def _expired(self, iid: str, when) -> bool:
+        """E-L3c: a memory superseded before the question was asked is not an answer."""
+        if not self.drop_expired or when is None:
+            return False
+        exp = self.expires_of.get(iid)
+        if exp is None:
+            return False
+        try:
+            w = when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+        except AttributeError:
+            return False
+        return exp <= w
+
+    def _parse_rows(self, rows, k: int, when=None) -> list[RecallHit]:
         hits = []
         for r in rows:
             kid = r.get("id")
             iid = self.by_kid.get(kid)
             if iid is None:
                 iid = f"kannaka:{kid}"   # a memory kannaka made itself (a dream, a merge)
+            if self._expired(iid, when):
+                continue
             hits.append(RecallHit(id=iid, score=float(r.get("similarity") or 0.0), text=(r.get("content") or "")[:200]))
         return hits[:k]
 
@@ -181,7 +212,8 @@ class KannakaAdapter(Adapter):
             path = os.path.join(self.dir, "queries.ndjson")
             with open(path, "w", encoding="utf-8") as f:
                 for q, w in zip(queries, whens):
-                    row = {"query": q[:1000], "top_k": k}
+                    # over-fetch when expired rows may be dropped, so k survive
+                    row = {"query": q[:1000], "top_k": k * 2 if self.drop_expired else k}
                     at = self._at_args(w)
                     if at:
                         row["at"] = at[1]
@@ -193,7 +225,7 @@ class KannakaAdapter(Adapter):
                     line = line.strip()
                     if line.startswith("["):
                         try:
-                            out.append(self._parse_rows(json.loads(line), k))
+                            out.append(self._parse_rows(json.loads(line), k, whens[len(out)] if len(out) < len(whens) else None))
                         except ValueError:
                             out.append([])
                 if len(out) == len(queries):
