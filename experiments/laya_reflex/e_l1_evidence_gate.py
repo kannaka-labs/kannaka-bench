@@ -183,6 +183,10 @@ def main():
             p.append(pp)
             n_pos += turn["has_answer"]
             n_pred += pp >= 0.5
+            # E-L1c needs the per-candidate probabilities, not just the aggregates.
+            with open(os.path.join(args.out, "decisions.jsonl"), "a", encoding="utf-8") as df:
+                df.write(json.dumps({"question_id": r["question_id"], "candidate": cid,
+                                     "p_yes": round(pp, 4), "has_answer": bool(turn["has_answer"])}) + "\n")
         per_q.append({"question_id": r["question_id"], "qtype": r.get("qtype"), "n": len(r["candidates"]),
                       "gold_turns_in_candidates": n_pos, "predicted_yes": n_pred})
         print(f"E-L1 {r['question_id']} {r.get('qtype')}: {n_pos} gold turns among {len(r['candidates'])}, "

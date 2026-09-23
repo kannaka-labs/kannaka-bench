@@ -801,3 +801,63 @@ What this does and does not show:
 The fine-tuned agent directory (`model.safetensors`, `encoder/`, `tokenizer/`,
 `rl_agent_config.json`, `train_meta.json`) is in Laya's layout and is what upstream's notebook
 pushes to the Hub — publication under kannaka-labs is one call with a token.
+
+## 2026-09-23 — E-L1c: the gate keeps the evidence and still loses answers (a loss)
+
+The fine-tuned reflex keeps 95% of the labelled evidence turns while discarding 85% of the
+candidates. Does handing the answer model only those rows improve answers, or at least keep
+them at a fraction of the tokens? Pre-registered rule (`experiments/laya_reflex/README.md`):
+the gate ships as an answer-stage option if accuracy is within one question of plain top-15
+at ≤ half the tokens, or higher at any token count.
+
+**Answer model caveat, stated first.** The Anthropic key behind the lab gateway hit its monthly
+limit tonight (Sonnet and Haiku both refuse until 2026-10-01), so both arms ran on
+`qwen2.5:14b` — the gateway's `kannaka-brain` route, served from ollama on a qBraid RTX 4090
+through an ssh tunnel to keep the answer stage and its data on debain2. Same model for both
+arms, same judge (the model judging itself, as the answer stage does by default), same 30
+questions, same day. **This is a within-model comparison; the absolute numbers are not the
+Sonnet rows above.** (The 14B model scored 0.800 at top-15 under its own judging, above the
+0.733 Sonnet-with-Sonnet-judge row; judges differ, so no conclusion about the models is drawn.)
+
+| arm (qwen2.5:14b answers and judges) | accuracy | correct | prompt tok / q | excerpts / q | answer p50 |
+|---|---|---|---|---|---|
+| plain top-15, turn pairs (the standard setting) | **0.800** | 24 / 30 | 5 163 | 20.7 | 3.2 s |
+| gate: candidates with fine-tuned P(yes) ≥ 0.5, min 1, turn pairs | 0.667 | 20 / 30 | **1 453** | 4.7 | 2.4 s |
+
+Six questions flipped, five against the gate, one for it:
+
+```
+51a45a95  single-session-user        1 -> 0
+6d550036  multi-session              1 -> 0
+06878be2  single-session-preference  1 -> 0
+6a1eabeb  knowledge-update           1 -> 0
+852ce960  knowledge-update           1 -> 0
+35a27287  single-session-preference  0 -> 1
+```
+
+By type (correct of 5): knowledge-update 5 → 3, multi-session 2 → 1, single-session-user
+4 → 3, single-session-preference 4 → 4 (one lost, one gained), temporal 4 → 4,
+single-session-assistant 5 → 5.
+
+**Rule: failed** — four questions down at 28% of the tokens. Reading it:
+- The gate is measured against LongMemEval's `has_answer` turns, and it finds them. The
+  answer model, though, was using turns the labels do not mark: the two knowledge-update
+  losses are the clearest case, where the model needs the *superseded* statement as well as
+  the current one to say what changed, and only the current one carries `has_answer`. The
+  gate is faithful to its labels and the labels are narrower than the answer needs.
+- 1 453 tokens per question is where the sibling/pair expansion lands after the gate has
+  already cut the candidate list to 2.4 rows; the saving is real (3.6×) and would matter at
+  scale, but not at four questions in thirty.
+- The one gain (a preference question) is the distraction effect the gate was meant to buy,
+  and it bought it once.
+
+What this leaves open, in order of promise: (1) gate with a wider aperture — keep the
+top-k *sessions* any kept turn belongs to, rather than the turns, so supersession context
+survives; (2) train the reflex on "used by the answer" labels rather than `has_answer`, which
+this run produced for the first time (the 24 correct top-15 answers and their excerpts);
+(3) re-run both arms on Sonnet when the account limit resets, since a stronger model may
+lean on the gate less. None of these is claimed; each is a run.
+
+Cost: the second RTX 4090 pod for the answer model, about 50 minutes including the ollama
+install and a 9 GB pull, ≈ 45 qBraid credits (≈ $0.45). Raw rows in
+`experiments/laya_reflex/results/e_l1c_*`.
