@@ -1,0 +1,23 @@
+Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 5 files:  20%|██        | 1/5 [00:00<00:01,  3.31it/s]Fetching 5 files:  80%|████████  | 4/5 [00:00<00:00, 11.30it/s]Fetching 5 files: 100%|██████████| 5/5 [00:06<00:00,  1.31s/it]
+/home/jovyan/e_l3e/e_l3c_supersede.py:58: RuntimeWarning: laya: this checkpoint ships temperatures outside [0.5, 5] which would distort confidence; clamping choice:11+=0.1006. Treat confidence from the affected buckets as uncalibrated.
+  agent = laya.Agent(args.agent_dir, device=args.device)
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 4321.95it/s]
+[1/17] 6a1eabeb items=413 pairs so far=3983 stamped=2 94s
+[2/17] 6aeb4375 items=468 pairs so far=8527 stamped=5 201s
+[3/17] 852ce960 items=396 pairs so far=12339 stamped=6 291s
+[4/17] 945e3d21 items=489 pairs so far=16991 stamped=10 399s
+[5/17] 07741c44 items=513 pairs so far=21967 stamped=13 516s
+[6/17] 184da446 items=473 pairs so far=26551 stamped=21 623s
+[7/17] 031748ae items=494 pairs so far=31353 stamped=22 737s
+[8/17] 0f05491a items=489 pairs so far=36120 stamped=24 849s
+[9/17] 08e075c7 items=484 pairs so far=40819 stamped=28 959s
+[10/17] 01493427 items=487 pairs so far=45566 stamped=30 1070s
+[11/17] 18bc8abd items=436 pairs so far=49805 stamped=31 1168s
+[12/17] 0e4e4c46 items=481 pairs so far=54455 stamped=33 1277s
+[13/17] 0ddfec37 items=483 pairs so far=59067 stamped=38 1385s
+[14/17] 06db6396 items=479 pairs so far=63722 stamped=41 1492s
+[15/17] 10e09553 items=472 pairs so far=68298 stamped=42 1599s
+[16/17] 0977f2af items=484 pairs so far=72970 stamped=46 1709s
+[17/17] 07741c45 items=527 pairs so far=78062 stamped=48 1829s
+done: {"questions": 17, "pairs": 78062, "stamped": 49, "items": 8068, "skipped_cos": 582} unique stamped items: 48

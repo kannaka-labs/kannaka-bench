@@ -1016,3 +1016,54 @@ model keeps its same-conversation sharpness (the 5K catch) while staying precise
 (recall drops `expires_at <= as-of`, `KANNAKA_RECALL_EXPIRED=keep` reverts; not yet in a release). Model:
 `flaukowski/laya-kannaka-supersession` (revision `e-l3d`). Raw rows in
 `experiments/laya_reflex/results/e_l3d/`.
+
+## 2026-09-23 — Laya E-L3e: the write-path shortlist at k=10 and k=20 (null on answers; the precision cliff sits between 10 and 20)
+
+Pre-registered in `experiments/laya_reflex/README.md` before the run. Same 17 held-out
+knowledge-update questions, same reflex (E-L3d, gate A: p ≥ 0.5, no other gates), same answer
+model (qwen2.5:14b); only the shortlist a new turn is checked against widens from its top-5 earlier
+neighbours (MiniLM cosine) to the top-10 and top-20. One RTX 6000 Ada pod for the two pre-passes
+(23 ms/pair, 78k and 154k pairs) and the answer model; 170.5 credits ≈ $1.71.
+
+| shortlist | pairs scored | stamps | true old caught | current facts expired | false stamps | hit@15 | evid@15 | **answers** |
+|---|---|---|---|---|---|---|---|---|
+| plain (control) | — | 0 | — | — | — | 0.941 | 0.912 | **0.765** (13/17) |
+| k=5 (E-L3d A) | 39,236 | 42 | 13/17 | 0 | 30 | 0.941 | 0.559 | **0.824** (14/17) |
+| **k=10** | 78,062 | 48 | 14/17 | 0 | 35 | 0.941 | 0.529 | **0.824** (14/17) |
+| k=20 | 153,897 | 61 | 14/17 | **1** | 47 | 0.941 | 0.500 | 0.765 (13/17) |
+
+(The k=5 row is E-L3d gate A re-counted by `map_stats.py`, which puts its false stamps at 30
+rather than the 29 reported there; same map, one accounting.)
+
+What the predictions said, and what happened:
+- **True catches would rise above 13/17 at k=20, and the 5K case would be caught.** Half right:
+  14/17 at k=10 and k=20 (the new catch is 031748ae, the role-change question), the 5K case
+  (6a1eabeb) caught at no k. And the reason is not the shortlist: its superseded turn is **rank 1**
+  of 365 earlier turns for the superseding turn (cosine 0.744), inside every shortlist, and the
+  E-L3d reflex says no to that exact pair while the E-L3b reflex said yes. The flagship miss is a
+  classifier miss, which is what the pre-registered step (2), training on the union of E-L3b's and
+  E-L3d's negatives, was written for.
+- **False stamps would grow about linearly with pairs (~60 at k=10, ~120 at k=20).** Wrong in the
+  good direction: 30 → 35 → 47. Deeper neighbours are lower-cosine and the reflex says no to most
+  of them.
+- **Current facts expired would stay 0.** True at k=10, false at k=20: question 945e3d21's current
+  fact (a turn about work projects) was expired by an unrelated turn about Twitter habits at
+  p = 0.91, cosine 0.30 — a pair that only enters the shortlist past rank 10. That is the shape of
+  the precision cliff: not many more false stamps, but the first one that lands on a fact the
+  question needs.
+
+Answers: k=10 is question-for-question identical to E-L3d A (14/17, the one gain over plain still
+01493427). The extra true catch changed no answer. k=20 gives back the gain: 07741c45 (the shoe
+rack) answered the *old* location after a stamp removed the current context, so 13/17, level with
+plain. By the pre-registered rule (largest k with answers ≥ 0.824 and 0 current facts expired)
+**k=10 is carried**, and it should be said plainly that it buys nothing measurable here: same
+answers as k=5 for 5 more false stamps and twice the pairs scored at write time.
+
+**Verdict: null.** The write-path shortlist is not what stands between +1 and the +4 the labels
+allow; the classifier is (13–14/17 catches, and a no on the one pair the whole line of work was
+motivated by). Widening past k=10 costs a current fact. Next, in order: (1) the union-negatives
+retrain (E-L3b + E-L3d negatives) evaluated on the same 17 with k=10; (2) then kannaka-memory
+#1044 (landed, unreleased) replaces `BENCH_DROP_EXPIRED` with a `--at` pass once a release
+carries it. Raw rows, both maps and the pre-pass logs in `experiments/laya_reflex/results/e_l3e/`;
+stamp accounting `experiments/laya_reflex/map_stats.py`.
+
