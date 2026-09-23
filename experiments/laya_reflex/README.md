@@ -102,6 +102,8 @@ kannaka-memory #1044 landed (PR #1046, unreleased): recall itself now drops a me
 `expires_at` is at or before the as-of instant, so `BENCH_DROP_EXPIRED` becomes a `--at` pass once a
 release carries it. Files: `results/e_l3d/`.
 
+**E-L3e (pre-registered 2026-09-23, before the run): write-path shortlist k=10 and k=20.** Same 17 held-out questions, same reflex (E-L3d, gate A: p >= 0.5, no other gates), only the shortlist widens from the top-5 earlier neighbours to the top-10 and top-20 (`e_l3c_supersede.py --k`). Motivation: 19/51 training-set true pairs sat outside the top 5, and the 5K flagship case is among the 4 held-out misses. Predictions: true catches rise above 13/17 at k=20 and the 5K case is caught; false stamps grow about linearly with pairs (29 at k=5 -> ~60 at k=10 -> ~120 at k=20) because the per-pair false rate is ~0.07%; current facts expired stays 0. Decision rule: carry the largest k whose answers are >= 0.824 (14/17) with 0 current facts expired; a k whose answers fall below plain 0.765 is a loss and is published as one. Cost: one RTX 6000 Ada pod (~$0.92/h), answers on qwen2.5:14b as before. Noise floor: +-1 question.
+
 - **E-L3c (as run):** ingest arm — at write time, recall the top-5 from the
   store so far, ask the reflex per candidate, stamp `expires_at` on a candidate at p ≥ 0.5;
   measure knowledge-update retrieval and answers against the standard row.
