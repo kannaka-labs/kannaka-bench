@@ -257,7 +257,13 @@ class KannakaAdapter(Adapter):
         return ["--at", iso]
 
     def recall(self, query: str, k: int, when=None) -> list[RecallHit]:
-        args = ["recall", query[:1000], "--top-k", str(k)]
+        # E-L3c: over-fetch when expired rows may be dropped, so k survive.
+        # (This single-question path is what run.py uses for LongMemEval — one
+        # question per store — so the drop has to live here, not only in
+        # recall_many; the first E-L3c retrieval arms were identical because
+        # it did not.)
+        fetch = k * 2 if self.drop_expired else k
+        args = ["recall", query[:1000], "--top-k", str(fetch)]
         if self.supports_at is not False:
             args += self._at_args(when)
         try:
@@ -271,7 +277,7 @@ class KannakaAdapter(Adapter):
                 print(f"[kannaka] binary rejects --at; temporal scoring will use the WALL CLOCK "
                       f"and the temporal exponent cannot rank on this corpus: {str(e)[:120]}",
                       file=sys.stderr)
-                out = self._run(["recall", query[:1000], "--top-k", str(k)])
+                out = self._run(["recall", query[:1000], "--top-k", str(fetch)])
             else:
                 raise
         else:
@@ -292,6 +298,8 @@ class KannakaAdapter(Adapter):
                         # a memory kannaka made itself (a dream, a merge): keep it,
                         # it just cannot score
                         iid = f"kannaka:{kid}"
+                    if self._expired(iid, when):
+                        continue
                     hits.append(RecallHit(id=iid, score=float(r.get("similarity") or 0.0),
                                           text=(r.get("content") or "")[:200]))
                 break
