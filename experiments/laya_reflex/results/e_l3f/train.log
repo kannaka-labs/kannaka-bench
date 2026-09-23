@@ -1,0 +1,49 @@
+Fetching 38 files:   0%|          | 0/38 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 38 files:   3%|▎         | 1/38 [00:00<00:11,  3.23it/s]Fetching 38 files:  13%|█▎        | 5/38 [00:00<00:02, 11.13it/s]Fetching 38 files:  24%|██▎       | 9/38 [00:00<00:01, 14.78it/s]Fetching 38 files:  34%|███▍      | 13/38 [00:00<00:01, 16.50it/s]Fetching 38 files:  42%|████▏     | 16/38 [00:01<00:01, 16.01it/s]Fetching 38 files:  47%|████▋     | 18/38 [00:01<00:01, 13.87it/s]Fetching 38 files:  58%|█████▊    | 22/38 [00:01<00:00, 17.60it/s]Fetching 38 files:  63%|██████▎   | 24/38 [00:01<00:00, 17.06it/s]Fetching 38 files:  71%|███████   | 27/38 [00:01<00:00, 18.26it/s]Fetching 38 files:  76%|███████▋  | 29/38 [00:01<00:00, 17.36it/s]Fetching 38 files:  84%|████████▍ | 32/38 [00:02<00:00, 18.35it/s]Fetching 38 files:  92%|█████████▏| 35/38 [00:04<00:00,  3.53it/s]Fetching 38 files:  97%|█████████▋| 37/38 [00:05<00:00,  2.73it/s]Fetching 38 files: 100%|██████████| 38/38 [00:06<00:00,  2.01it/s]Fetching 38 files: 100%|██████████| 38/38 [00:06<00:00,  5.55it/s]
+2601 training sequences from 2601 rows
+/home/jovyan/e_l3f/train_e_l1b.py:169: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  sched.step()
+  epoch 1/6 step 50 loss 0.6987 reward 0.695 12s
+  epoch 1/6 step 100 loss -0.0372 reward 0.745 24s
+  epoch 1/6 step 150 loss 0.0000 reward 0.750 36s
+  epoch 1/6 step 200 loss 0.0000 reward 0.750 48s
+  epoch 1/6 step 250 loss 1.9347 reward -0.495 60s
+  epoch 1/6 step 300 loss 0.0000 reward 0.750 72s
+=== epoch 1/6 avg loss 0.3916 at 78s ===
+  epoch 2/6 step 50 loss 0.0000 reward 0.750 90s
+  epoch 2/6 step 100 loss -0.0104 reward 0.750 102s
+  epoch 2/6 step 150 loss 0.0000 reward 0.750 114s
+  epoch 2/6 step 200 loss 0.0000 reward 0.750 126s
+  epoch 2/6 step 250 loss 0.0000 reward 0.750 138s
+  epoch 2/6 step 300 loss 2.0973 reward -0.495 150s
+=== epoch 2/6 avg loss 0.2737 at 156s ===
+  epoch 3/6 step 50 loss 0.0000 reward 0.750 168s
+  epoch 3/6 step 100 loss 0.0000 reward 0.750 180s
+  epoch 3/6 step 150 loss 0.0000 reward 0.750 192s
+  epoch 3/6 step 200 loss -0.0094 reward 0.750 204s
+  epoch 3/6 step 250 loss 0.0000 reward 0.750 216s
+  epoch 3/6 step 300 loss 0.0000 reward 0.750 228s
+=== epoch 3/6 avg loss 0.1655 at 235s ===
+  epoch 4/6 step 50 loss 0.0000 reward 0.750 246s
+  epoch 4/6 step 100 loss 0.0000 reward 0.750 259s
+  epoch 4/6 step 150 loss 0.0000 reward 0.750 271s
+  epoch 4/6 step 200 loss 0.0000 reward 0.750 283s
+  epoch 4/6 step 250 loss 0.0000 reward 0.750 295s
+  epoch 4/6 step 300 loss 0.0000 reward 0.750 308s
+=== epoch 4/6 avg loss 0.0602 at 314s ===
+  epoch 5/6 step 50 loss 0.0000 reward 0.750 325s
+  epoch 5/6 step 100 loss 0.0000 reward 0.750 337s
+  epoch 5/6 step 150 loss 0.0000 reward 0.750 349s
+  epoch 5/6 step 200 loss 0.0000 reward 0.750 361s
+  epoch 5/6 step 250 loss 0.0000 reward 0.750 373s
+  epoch 5/6 step 300 loss 0.0000 reward 0.750 385s
+=== epoch 5/6 avg loss 0.0293 at 391s ===
+  epoch 6/6 step 50 loss 0.0000 reward 0.750 403s
+  epoch 6/6 step 100 loss 0.0000 reward 0.750 416s
+  epoch 6/6 step 150 loss 2.2998 reward -0.495 428s
+  epoch 6/6 step 200 loss 0.0000 reward 0.750 440s
+  epoch 6/6 step 250 loss 0.0000 reward 0.750 452s
+  epoch 6/6 step 300 loss 0.0000 reward 0.750 464s
+=== epoch 6/6 avg loss 0.0286 at 470s ===
+fitted temperatures (choice, score, noul): [1.637, 1.251, 1.0]
+saved to e_l3f/laya_e_l3f after 473s

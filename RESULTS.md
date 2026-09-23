@@ -1067,3 +1067,45 @@ retrain (E-L3b + E-L3d negatives) evaluated on the same 17 with k=10; (2) then k
 carries it. Raw rows, both maps and the pre-pass logs in `experiments/laya_reflex/results/e_l3e/`;
 stamp accounting `experiments/laya_reflex/map_stats.py`.
 
+## 2026-09-23 — Laya E-L3f: union negatives (loss; the reflex learned to say no)
+
+Pre-registered in `experiments/laya_reflex/README.md` before the run. One reflex trained from the base
+Laya checkpoint on the E-L3d rows (51 positives ×6, 2,040 write-path shortlist negatives) plus the
+E-L3b rows (the same 51 positives with 204 same-conversation negatives): 2,601 rows, 357 positive.
+Same recipe (6 epochs, grad-accum 4, 473 s on an L40S; the RTX 6000 Ada had no capacity), same 17
+held-out questions, k=10 gate A, same answer model. 224.5 credits ≈ $2.25.
+
+| model | held-out pair AUROC | P / R @0.5 | 5K pair P(yes) | stamps @k=10 | true old caught | current expired | false | evid@15 | **answers** |
+|---|---|---|---|---|---|---|---|---|---|
+| plain (control) | — | — | — | 0 | — | — | — | 0.912 | **0.765** (13/17) |
+| E-L3b (same-conversation negatives) | 0.929 | 0.94 / 0.88 | yes | 397 @k=5 | 13/17 | 0 | ~384 | 0.559 | 0.647 (11/17) |
+| E-L3d (shortlist negatives) | 0.939 | — | 0.000 | 48 | 14/17 | 0 | 35 | 0.529 | **0.824** (14/17) |
+| **E-L3f (union)** | **0.853** | 1.00 / 0.65 | **0.309** | 24 | 11/17 | 0 | 13 | 0.618 | 0.765 (13/17) |
+
+Predictions against outcome: pair AUROC ≥ 0.93 — **no** (0.853, the lowest of the three trained
+reflexes); the 5K pair at p ≥ 0.5 — **no** (0.309; it moved from 0.000, and E-L3b had said yes);
+true catches ≥ 14/17 — **no** (11/17); false stamps ≤ 45 — yes (13); current facts expired 0 —
+yes; answers ≥ 0.824 — **no** (0.765). By the pre-registered rule this is a **loss**, and it is
+published as one.
+
+Reading it: given two negative distributions that disagree about what "the same topic" looks
+like, the model resolved the conflict by becoming conservative — precision 1.00 at recall 0.65 on
+held-out pairs, half the stamps of E-L3d, and three true supersessions it used to catch now
+missed (07741c45, 945e3d21 and the 07741c44 sibling). The same-conversation negatives did not
+hand back E-L3b's 5K decision; that catch had come bundled with ~384 false stamps and does not
+survive being made precise. The answer change is one question (07741c45, the shoe rack, answered
+the old location) and sits on the ±1 noise floor of a 17-question set — the same question also
+flipped in E-L3e's k=20 arm.
+
+Where the E-L3 line stands after six runs (a → f): the best write-time supersession reflex is
+E-L3d gate A at k=5 or k=10, **+1 over plain at zero collateral, which is inside the noise floor
+and is not claimed as a gain**; the flagship 5K case has been caught only by the model that also
+stamped 384 false positives. Next, in order: (1) stop iterating the classifier on 17 questions —
+widen the held-out knowledge-update set (LongMemEval-M, LoCoMo's update questions) so ±1 is no
+longer the floor, before any further training; (2) kannaka-memory #1044 (landed, unreleased) makes
+the drop a recall rule, so the bench's `BENCH_DROP_EXPIRED` becomes a `--at` pass once a release
+carries it. GPU work is paused until the qBraid balance is topped up (262.7 credits ≈ $2.63 left).
+Weights of the union model were not kept. Raw rows, map, pre-pass and training logs, the held-out
+pair decisions and the E-L3b rows in `experiments/laya_reflex/results/e_l3f/`.
+
+

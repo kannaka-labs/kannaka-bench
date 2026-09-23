@@ -1,0 +1,206 @@
+{
+ "threshold": 0.5,
+ "k": 10,
+ "agent_dir": "e_l3f/laya_e_l3f",
+ "stats": {
+  "questions": 17,
+  "pairs": 78062,
+  "stamped": 24,
+  "items": 8068,
+  "skipped_cos": 582
+ },
+ "map": {
+  "6c456a5d#2": {
+   "expires": "2023-05-23T13:01:00Z",
+   "expires_src": "2023/05/23 (Tue) 13:01",
+   "by": "answer_a25d4a91_1#2",
+   "p": 0.9999,
+   "cos": 0.3112,
+   "question_id": "6a1eabeb"
+  },
+  "6da0bba2_1#10": {
+   "expires": "2023-05-30T06:09:00Z",
+   "expires_src": "2023/05/30 (Tue) 06:09",
+   "by": "5b71808d#8",
+   "p": 0.9936,
+   "cos": 0.409,
+   "question_id": "6a1eabeb"
+  },
+  "c625cff4_3#4": {
+   "expires": "2023-08-08T06:29:00Z",
+   "expires_src": "2023/08/08 (Tue) 06:29",
+   "by": "8de5b7cf_1#10",
+   "p": 0.9999,
+   "cos": 0.5619,
+   "question_id": "6aeb4375"
+  },
+  "answer_3f9693b7_1#8": {
+   "expires": "2023-09-30T15:06:00Z",
+   "expires_src": "2023/09/30 (Sat) 15:06",
+   "by": "answer_3f9693b7_2#2",
+   "p": 1.0,
+   "cos": 0.8211,
+   "question_id": "6aeb4375"
+  },
+  "answer_3a6f1e82_1#2": {
+   "expires": "2023-11-30T00:36:00Z",
+   "expires_src": "2023/11/30 (Thu) 00:36",
+   "by": "answer_3a6f1e82_2#0",
+   "p": 1.0,
+   "cos": 0.3976,
+   "question_id": "852ce960"
+  },
+  "7ee6a6c0_1#0": {
+   "expires": "2023-05-23T08:55:00Z",
+   "expires_src": "2023/05/23 (Tue) 08:55",
+   "by": "67d1de46_2#0",
+   "p": 0.9999,
+   "cos": 0.4812,
+   "question_id": "184da446"
+  },
+  "answer_e2f4f947_1#0": {
+   "expires": "2023-05-29T09:12:00Z",
+   "expires_src": "2023/05/29 (Mon) 09:12",
+   "by": "answer_e2f4f947_2#6",
+   "p": 0.9999,
+   "cos": 0.7033,
+   "question_id": "184da446"
+  },
+  "answer_8748f791_1#10": {
+   "expires": "2023-10-24T13:53:00Z",
+   "expires_src": "2023/10/24 (Tue) 13:53",
+   "by": "answer_8748f791_2#2",
+   "p": 0.9999,
+   "cos": 0.4676,
+   "question_id": "031748ae"
+  },
+  "answer_d6d2eba8_1#10": {
+   "expires": "2023-07-30T02:08:00Z",
+   "expires_src": "2023/07/30 (Sun) 02:08",
+   "by": "answer_d6d2eba8_2#6",
+   "p": 0.9999,
+   "cos": 0.6516,
+   "question_id": "0f05491a"
+  },
+  "answer_d6d2eba8_1#9": {
+   "expires": "2023-07-30T02:08:00Z",
+   "expires_src": "2023/07/30 (Sun) 02:08",
+   "by": "answer_d6d2eba8_2#7",
+   "p": 0.9999,
+   "cos": 0.6661,
+   "question_id": "0f05491a"
+  },
+  "answer_cdbe2250_1#2": {
+   "expires": "2023-09-02T01:13:00Z",
+   "expires_src": "2023/09/02 (Sat) 01:13",
+   "by": "answer_cdbe2250_2#2",
+   "p": 0.9999,
+   "cos": 0.5793,
+   "question_id": "08e075c7"
+  },
+  "answer_a7b44747_1#6": {
+   "expires": "2023-11-30T18:35:00Z",
+   "expires_src": "2023/11/30 (Thu) 18:35",
+   "by": "answer_a7b44747_2#0",
+   "p": 0.9999,
+   "cos": 0.5051,
+   "question_id": "01493427"
+  },
+  "answer_f2f998c7_1#2": {
+   "expires": "2023-05-25T22:16:00Z",
+   "expires_src": "2023/05/25 (Thu) 22:16",
+   "by": "answer_f2f998c7_2#8",
+   "p": 0.9999,
+   "cos": 0.3257,
+   "question_id": "0e4e4c46"
+  },
+  "sharegpt_RNF6TzV_0#5": {
+   "expires": "2023-06-30T00:17:00Z",
+   "expires_src": "2023/06/30 (Fri) 00:17",
+   "by": "sharegpt_UyBTuTv_0#1",
+   "p": 0.5091,
+   "cos": 0.3495,
+   "question_id": "0ddfec37"
+  },
+  "sharegpt_RNF6TzV_0#1": {
+   "expires": "2023-06-30T00:17:00Z",
+   "expires_src": "2023/06/30 (Fri) 00:17",
+   "by": "sharegpt_UyBTuTv_0#1",
+   "p": 0.5027,
+   "cos": 0.347,
+   "question_id": "0ddfec37"
+  },
+  "sharegpt_RNF6TzV_0#3": {
+   "expires": "2023-06-30T00:17:00Z",
+   "expires_src": "2023/06/30 (Fri) 00:17",
+   "by": "sharegpt_UyBTuTv_0#1",
+   "p": 0.5034,
+   "cos": 0.3035,
+   "question_id": "0ddfec37"
+  },
+  "answer_a22b654d_1#0": {
+   "expires": "2023-12-30T02:28:00Z",
+   "expires_src": "2023/12/30 (Sat) 02:28",
+   "by": "answer_a22b654d_2#0",
+   "p": 0.9999,
+   "cos": 0.4338,
+   "question_id": "0ddfec37"
+  },
+  "a5959675_2#2": {
+   "expires": "2024-01-01T13:58:00Z",
+   "expires_src": "2024/01/01 (Mon) 13:58",
+   "by": "ed7f9ab0_1#2",
+   "p": 0.9996,
+   "cos": 0.4323,
+   "question_id": "0ddfec37"
+  },
+  "answer_da72b1b4_1#4": {
+   "expires": "2023-10-09T07:00:00Z",
+   "expires_src": "2023/10/09 (Mon) 07:00",
+   "by": "answer_da72b1b4_2#0",
+   "p": 1.0,
+   "cos": 0.479,
+   "question_id": "06db6396"
+  },
+  "answer_da72b1b4_1#8": {
+   "expires": "2023-10-09T07:00:00Z",
+   "expires_src": "2023/10/09 (Mon) 07:00",
+   "by": "answer_da72b1b4_2#0",
+   "p": 0.9999,
+   "cos": 0.4686,
+   "question_id": "06db6396"
+  },
+  "sharegpt_PAveUvy_0#0": {
+   "expires": "2023-09-04T20:23:00Z",
+   "expires_src": "2023/09/04 (Mon) 20:23",
+   "by": "e28c1f0d_2#4",
+   "p": 0.9988,
+   "cos": 0.1392,
+   "question_id": "10e09553"
+  },
+  "answer_67be2c38_1#2": {
+   "expires": "2023-11-30T00:28:00Z",
+   "expires_src": "2023/11/30 (Thu) 00:28",
+   "by": "answer_67be2c38_2#2",
+   "p": 0.9999,
+   "cos": 0.4157,
+   "question_id": "10e09553"
+  },
+  "b3642bd9_3#0": {
+   "expires": "2023-05-02T02:00:00Z",
+   "expires_src": "2023/05/02 (Tue) 02:00",
+   "by": "e0bfe67a_2#0",
+   "p": 0.9999,
+   "cos": 0.2341,
+   "question_id": "0977f2af"
+  },
+  "cbf48918_1#0": {
+   "expires": "2023-05-21T13:07:00Z",
+   "expires_src": "2023/05/21 (Sun) 13:07",
+   "by": "149e026c_1#0",
+   "p": 0.9999,
+   "cos": 0.3421,
+   "question_id": "0977f2af"
+  }
+ }
+}
