@@ -87,15 +87,16 @@ positives, so ±0.06). Train-set 0.998 (memorised, as 255 rows in 42 s would be)
 
 **E-L3c outcome (2026-09-23): loss.** Pre-pass stamped 397 of 8,068 turns (found 13/17 true
 supersessions, expired 0/17 current facts); answers on qwen2.5:14b: plain **0.765** (13/17) vs
-supersede+drop **0.588** (10/17) - two flips for (the 5K time, the textbook case), five against,
-one an instrument fault (`--top-k 30` returned 0 rows). Cause: precision collapses at the write
+supersede+drop **0.647** (11/17; corrected 09-23 — the "instrument fault" row was this harness's
+parser splitting a JSON line at U+2028, kannaka-bench f33a542) - two flips for (the 5K time, the
+textbook case), four against. Cause: precision collapses at the write
 path's 1:2,300 prior. Next: E-L3d (cross-topic negatives, gate p >= 0.99 + same speaker + cosine
 floor). Files: `results/e_l3c/`.
 
 **E-L3d outcome (2026-09-23): +1 at zero collateral.** Reflex retrained on the write path's own
 shortlist pairs (`build_e_l3d_dataset.py`, 2,346 rows; 19/51 true pairs were outside the top-5
 shortlist). Held-out pair AUROC 0.939. Gates A/B/C stamp 42/30/15 (29/18/8 false), all three
-answer **0.824** (14/17) vs plain 0.765 vs E-L3c 0.588; the one gain is a different question and
+answer **0.824** (14/17) vs plain 0.765 vs E-L3c 0.647 (corrected); the one gain is a different question and
 the 5K flagship case is still missed. Carry gate A. Next: k=10/20 shortlist, union negatives.
 kannaka-memory #1044 landed (PR #1046, unreleased): recall itself now drops a memory whose
 `expires_at` is at or before the as-of instant, so `BENCH_DROP_EXPIRED` becomes a `--at` pass once a

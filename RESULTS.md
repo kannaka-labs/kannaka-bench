@@ -923,11 +923,14 @@ negatives keeps its 0.94 precision only at that prior.
 | arm | hit@15 | recall@15 | evid@15 | answer accuracy (qwen2.5:14b) |
 |---|---|---|---|---|
 | plain | 0.941 | 0.941 | 0.912 | **0.765** (13 / 17) |
-| supersede + drop | 0.882 | 0.882 | 0.559 | 0.588 (10 / 17) |
+| supersede + drop | 0.941 | 0.941 | 0.588 | 0.647 (11 / 17)† |
+
+† Corrected 2026-09-23. The original row read 0.882 / 0.882 / 0.559 / 0.588 (10/17) with question 06db6396 recorded as an "instrument fault" (0 rows at `--top-k 30`). That was this harness, not the binary: the row at rank 16 of that store carries U+2028, serde_json emits it raw, and the adapter's `splitlines()` split the JSON array there, so every k ≥ 17 parsed as zero hits (kannaka-memory #1045, closed; fix kannaka-bench f33a542 + regression test). Re-run of that one question with the fix (`results/e_l3c/*_q06_fixed*`): hit, evidence 0.5 (the superseded fact dropped, by design), answer CORRECT on qwen2.5:14b. Metrics recomputed over 17 with that row: hit@15 16/17, evid@15 10/17, answers 11/17. Still a loss against plain 0.765.
 
 Retrieval metrics cannot judge this arm: LongMemEval labels *both* the old and the new fact as
 evidence, so dropping the superseded one halves evidence coverage by design. The answer column
-is the measurement, and it is a loss: seven flips, two for, five against.
+is the measurement, and it is a loss: six flips, two for, four against (the seventh flip first
+recorded here, 06db6396, was the harness — see the note under the table).
 
 ```
 6a1eabeb  0 -> 1   personal-best 5K: plain answered 27:12 (the OLD time), supersede answered 25:50. The case.
@@ -936,7 +939,7 @@ is the measurement, and it is a loss: seven flips, two for, five against.
 07741c45  1 -> 0   same answer text, judged wrong on the detail it dropped
 0f05491a  1 -> 0   stars count: chose the wrong revision
 6aeb4375  1 -> 0   "four Korean restaurants" -> answered three (the OLD count) after a false-positive stamp
-06db6396  1 -> 0   INSTRUMENT: recall returned 0 rows at --top-k 30 (fine at 16); counted as a miss, not excused
+06db6396  1 -> 1   first recorded 1 -> 0 as "INSTRUMENT: 0 rows at --top-k 30"; that was the harness parser (U+2028), fixed and re-run 09-23: CORRECT
 ```
 
 Reading it:
@@ -954,8 +957,8 @@ Reading it:
 **Next, in order (each a run, none claimed):** E-L3d — train with negatives drawn at the write
 path's own distribution (cross-topic shortlist pairs, roughly 1:2,300), gate on p ≥ 0.99 *and*
 same speaker *and* a cosine floor, and re-measure; then the kannaka-memory #1044 path so the rule
-lives in recall, not the harness. The instrument fault (0 rows at `--top-k 30`) gets its own
-kannaka-memory issue.
+lives in recall, not the harness. The "instrument fault" (0 rows at `--top-k 30`) was filed as
+kannaka-memory #1045 and turned out to be this harness (closed 09-23; fix f33a542, note above).
 
 Raw rows in `experiments/laya_reflex/results/e_l3c/` (the supersede map, both retrieval runs,
 both answer runs).
@@ -981,13 +984,15 @@ Then the pre-pass on the 17 held-out questions at three gates (`e_l3c_supersede.
 | arm | gate | stamps | true old caught | current facts expired | false stamps | hit@15 | evid@15 | **answers (qwen2.5:14b)** |
 |---|---|---|---|---|---|---|---|---|
 | plain (control) | — | 0 | — | — | — | 0.941 | 0.912 | **0.765** (13/17) |
-| E-L3c (previous reflex) | p ≥ 0.5 | 397 | 13/17 | 0 | ~384 | 0.882 | 0.559 | 0.588 (10/17) |
+| E-L3c (previous reflex) | p ≥ 0.5 | 397 | 13/17 | 0 | ~384 | 0.941 | 0.588 | 0.647 (11/17)† |
 | **E-L3d A** | p ≥ 0.5 | 42 | 13/17 | 0 | 29 | 0.941 | 0.559 | **0.824** (14/17) |
 | E-L3d B | + same speaker | 30 | 12/17 | 0 | 18 | 0.941 | 0.588 | **0.824** (14/17) |
 | E-L3d C | + cos ≥ 0.5 | 15 | 7/17 | 0 | 8 | 0.941 | 0.735 | **0.824** (14/17) |
 
+† E-L3c row corrected 2026-09-23 (harness parser bug on one question; see the E-L3c section).
+
 - **Precision is the whole gain.** Same 13/17 true catches as E-L3c with 29 false stamps instead
-  of 384; the five collateral losses are gone, every arm keeps all its session hits, and answers
+  of 384; the four collateral losses are gone, every arm keeps all its session hits, and answers
   go from three below the control to one above it. The over-fetch fix (k+5, retry on empty)
   also held: no zero-row question this time.
 - **All three arms are the same 14/17, and the one gain is not the 5K question.** The flip is
