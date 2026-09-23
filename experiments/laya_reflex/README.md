@@ -60,9 +60,38 @@ answer needs the *superseded* turn, which `has_answer` never marks. Rows in
 Next candidates (each a run, none claimed): session-aperture gating; training on
 "used-by-the-answer" labels this run produced; the same two arms on Sonnet after the reset.
 
+## E-L3 — supersession at write time (`e_l3_supersession.py`)
+
+LongMemEval-S knowledge-update questions each mark two evidence turns: where a fact was stated
+and where it later changed. That is a labelled supersession pair, and the write-time decision
+Kannaka never makes today (the temporal triple exists; nothing fills `expires_at`). The
+`noul`: *does the later statement update, correct or replace a fact stated in the earlier
+statement?* Positives: (old evidence turn, new evidence turn), 70 clean questions. Hard
+negatives: 4 per positive, other turns from the same conversation as the old turn paired with
+the same new turn, all in true chronological order so date cannot separate them.
+
+**Decision rules (fixed 2026-09-23, before the run):**
+- **E-L3a, off the shelf, all 350 pairs:** the control, not the candidate. AUROC ≥ 0.85 and
+  Brier ≤ 0.15 would be a surprise worth its own note; otherwise it is the baseline E-L3b is
+  measured against. Runs on CPU.
+- **E-L3b, fine-tuned on the 50 non-held-out questions (≈250 rows), scored on the 20 held-out
+  questions (100 pairs):** the reflex becomes a candidate for the ingest path if held-out
+  **AUROC ≥ 0.85 and Brier ≤ 0.15** and recall at p ≥ 0.5 is ≥ 0.80 (a supersession reflex
+  that misses a fifth of updates is not one to stamp `expires_at` with). 20 positives is a
+  small test; the AUROC's standard error is about ±0.05 and is reported as such.
+**Outcomes (2026-09-23):** E-L3a off the shelf AUROC **0.443** over all 340 pairs (0.359 on the
+held-out 85) — below chance, Brier = always-no. **E-L3b fine-tuned: held-out AUROC 0.929, Brier
+0.039, precision 0.94 / recall 0.88 at p ≥ 0.5, 24.8 ms on an RTX 5090 — PASSED** (17 held-out
+positives, so ±0.06). Train-set 0.998 (memorised, as 255 rows in 42 s would be). Model:
+`flaukowski/laya-kannaka-supersession`. Files: `results/e_l3_*`, `results/decisions_*`.
+
+- **E-L3c (E-L3b passed, so it runs next):** ingest arm — at write time, recall the top-5 from the
+  store so far, ask the reflex per candidate, stamp `expires_at` on a candidate at p ≥ 0.5;
+  measure knowledge-update retrieval and answers against the standard row.
+
 ## Planned, not started
 
-- **E-L3 supersession at write time** (`noul` "does this update an existing memory?", then
+- ~~E-L3 supersession at write time~~ → above. (`noul` "does this update an existing memory?", then
   `choice` over the recall shortlist for which one) — measured on knowledge-update questions.
 - **E-L4 retrieval-grounded calibration of forgetting** — a dream asks `choice {keep, ghost,
   merge}` per row; the reactivation sidecar is the ground truth that arrives later. Needs the
