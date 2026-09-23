@@ -959,3 +959,54 @@ kannaka-memory issue.
 
 Raw rows in `experiments/laya_reflex/results/e_l3c/` (the supersede map, both retrieval runs,
 both answer runs).
+
+## 2026-09-23 — E-L3d: train the reflex at the write path's prior — no more collateral, one gain, the flagship case still missed
+
+E-L3c lost because a reflex trained on same-conversation negatives at a 1:4 prior stamped ~380
+false supersessions at the write path's 1:2,300 prior. E-L3d retrains it on the write path's own
+pairs: for each of the 51 training questions, the chronological top-5-earlier shortlist over the
+whole haystack (`build_e_l3d_dataset.py`), every pair negative except the true (old, new) one, 40
+negatives per positive (half the hardest by cosine, half uniform), positives repeated ×6 —
+2,346 rows. Same hold-out as before. Six epochs, 364 s on an RTX 5090.
+
+Two facts from building it, before any model ran:
+- **19 of 51 true supersession pairs were not in the top-5 shortlist.** The write path's recall
+  bounds this whole line: at k=5, a perfect classifier could stamp at most 32 of 51.
+- Held-out pair AUROC **0.939**, Brier 0.053 — no regression from E-L3b's 0.929 on the pair task,
+  so the harder negatives cost nothing there.
+
+Then the pre-pass on the 17 held-out questions at three gates (`e_l3c_supersede.py` now takes
+`--same-speaker` and `--min-cos`), each followed by the retrieval and answer arms:
+
+| arm | gate | stamps | true old caught | current facts expired | false stamps | hit@15 | evid@15 | **answers (qwen2.5:14b)** |
+|---|---|---|---|---|---|---|---|---|
+| plain (control) | — | 0 | — | — | — | 0.941 | 0.912 | **0.765** (13/17) |
+| E-L3c (previous reflex) | p ≥ 0.5 | 397 | 13/17 | 0 | ~384 | 0.882 | 0.559 | 0.588 (10/17) |
+| **E-L3d A** | p ≥ 0.5 | 42 | 13/17 | 0 | 29 | 0.941 | 0.559 | **0.824** (14/17) |
+| E-L3d B | + same speaker | 30 | 12/17 | 0 | 18 | 0.941 | 0.588 | **0.824** (14/17) |
+| E-L3d C | + cos ≥ 0.5 | 15 | 7/17 | 0 | 8 | 0.941 | 0.735 | **0.824** (14/17) |
+
+- **Precision is the whole gain.** Same 13/17 true catches as E-L3c with 29 false stamps instead
+  of 384; the five collateral losses are gone, every arm keeps all its session hits, and answers
+  go from three below the control to one above it. The over-fetch fix (k+5, retry on empty)
+  also held: no zero-row question this time.
+- **All three arms are the same 14/17, and the one gain is not the 5K question.** The flip is
+  `01493427` (postcards count). The flagship case, `6a1eabeb`, answers the old 27:12 in every
+  arm: its superseded turn is among the four the reflex did not catch this time (E-L3c's model
+  caught it and that arm alone got it right). So the honest reading is: the precision problem
+  is fixed; the recall problem — shortlist coverage and the classifier's 13/17 — is what stands
+  between +1 and the +4 the labels allow.
+- The gates barely matter once precision is fixed: same-speaker removes 11 false stamps for one
+  lost catch; the cosine floor throws away six true catches for ten false ones and changes no
+  answer. Gate A (no gates, retrained model) is the setting to carry.
+
+**Verdict:** E-L3d passes the bar E-L3c set (answers not below plain) and is a **net +1 at zero
+collateral**. Not claimed: that this generalises past 17 questions (±1 question is the noise
+floor here), or that it helps the flagship case, which it demonstrably does not yet.
+
+**Next, in order:** (1) shortlist recall — k=10 and k=20 at the write path, since 19/51 true
+pairs sit outside the top 5; (2) train on the union of E-L3b's and E-L3d's negatives so the
+model keeps its same-conversation sharpness (the 5K catch) while staying precise in the wild;
+(3) kannaka-memory #1044 so the drop lives in recall. Model:
+`flaukowski/laya-kannaka-supersession` (revision `e-l3d`). Raw rows in
+`experiments/laya_reflex/results/e_l3d/`.
