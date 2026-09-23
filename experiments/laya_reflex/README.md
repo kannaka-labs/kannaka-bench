@@ -52,6 +52,14 @@ plain top-15, same 30 questions, same judge: accuracy and tokens per question.
 **Decision rule:** the gate ships as an answer-stage option if accuracy is within one question
 of top-15 at ≤ half the tokens, or higher at any token count. Otherwise it stays a research row.
 
+**Outcome (2026-09-23): loss.** Within-model on qwen2.5:14b (the Anthropic key behind the
+gateway is capped until 2026-10-01): plain top-15 **0.800** (24/30, 5 163 tok/q) vs gated
+**0.667** (20/30, 1 453 tok/q). Five flips against, one for; knowledge-update 5 → 3 because the
+answer needs the *superseded* turn, which `has_answer` never marks. Rows in
+`results/e_l1c_answers_*.jsonl`, gate decisions in `results/e_l1c_gate_decisions.jsonl`.
+Next candidates (each a run, none claimed): session-aperture gating; training on
+"used-by-the-answer" labels this run produced; the same two arms on Sonnet after the reset.
+
 ## Planned, not started
 
 - **E-L3 supersession at write time** (`noul` "does this update an existing memory?", then
