@@ -96,8 +96,10 @@ floor). Files: `results/e_l3c/`.
 shortlist pairs (`build_e_l3d_dataset.py`, 2,346 rows; 19/51 true pairs were outside the top-5
 shortlist). Held-out pair AUROC 0.939. Gates A/B/C stamp 42/30/15 (29/18/8 false), all three
 answer **0.824** (14/17) vs plain 0.765 vs E-L3c 0.588; the one gain is a different question and
-the 5K flagship case is still missed. Carry gate A. Next: k=10/20 shortlist, union negatives,
-kannaka-memory #1044. Files: `results/e_l3d/`.
+the 5K flagship case is still missed. Carry gate A. Next: k=10/20 shortlist, union negatives.
+kannaka-memory #1044 landed (PR #1046, unreleased): recall itself now drops a memory whose
+`expires_at` is at or before the as-of instant, so `BENCH_DROP_EXPIRED` becomes a `--at` pass once a
+release carries it. Files: `results/e_l3d/`.
 
 - **E-L3c (as run):** ingest arm — at write time, recall the top-5 from the
   store so far, ask the reflex per candidate, stamp `expires_at` on a candidate at p ≥ 0.5;

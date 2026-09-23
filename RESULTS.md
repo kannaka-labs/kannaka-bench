@@ -1007,6 +1007,7 @@ floor here), or that it helps the flagship case, which it demonstrably does not 
 **Next, in order:** (1) shortlist recall — k=10 and k=20 at the write path, since 19/51 true
 pairs sit outside the top 5; (2) train on the union of E-L3b's and E-L3d's negatives so the
 model keeps its same-conversation sharpness (the 5K catch) while staying precise in the wild;
-(3) kannaka-memory #1044 so the drop lives in recall. Model:
+(3) kannaka-memory #1044 so the drop lives in recall — landed 2026-09-23 in kannaka-memory PR #1046
+(recall drops `expires_at <= as-of`, `KANNAKA_RECALL_EXPIRED=keep` reverts; not yet in a release). Model:
 `flaukowski/laya-kannaka-supersession` (revision `e-l3d`). Raw rows in
 `experiments/laya_reflex/results/e_l3d/`.
