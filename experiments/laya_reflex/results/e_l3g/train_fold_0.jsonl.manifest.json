@@ -1,0 +1,10 @@
+{
+ "shortlist_pairs": 131081,
+ "questions": 55,
+ "positives": 55,
+ "negatives": 2200,
+ "skipped": 7,
+ "positive_not_in_shortlist": 19,
+ "rows": 2530,
+ "held_out": 16
+}

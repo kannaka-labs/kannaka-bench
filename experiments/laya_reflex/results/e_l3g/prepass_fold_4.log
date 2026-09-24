@@ -1,0 +1,20 @@
+/home/jovyan/e_l3g/e_l3c_supersede.py:58: RuntimeWarning: laya: this checkpoint ships invalid temperatures or values outside [0.5, 5]; using choice:11+=0.10058280825614929 -> 0.5. Treat confidence from the affected entries as uncalibrated.
+  agent = laya.Agent(args.agent_dir, device=args.device)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights:  83%|████████▎ | 85/103 [00:00<00:00, 829.52it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 849.28it/s]
+[1/15] 6aeb4375 items=468 pairs so far=2288 stamped=1 50s
+[2/15] ce6d2d27 items=521 pairs so far=4842 stamped=1 107s
+[3/15] 07741c44 items=513 pairs so far=7340 stamped=2 161s
+[4/15] a1eacc2a items=474 pairs so far=9645 stamped=3 211s
+[5/15] 2698e78f items=478 pairs so far=11975 stamped=5 261s
+[6/15] 6071bd76 items=482 pairs so far=14325 stamped=5 312s
+[7/15] 18bc8abd items=436 pairs so far=16445 stamped=5 357s
+[8/15] 7a87bd0c items=506 pairs so far=18915 stamped=7 410s
+[9/15] ed4ddc30 items=543 pairs so far=21561 stamped=12 467s
+[10/15] 5831f84d items=422 pairs so far=23611 stamped=15 511s
+[11/15] dfde3500 items=480 pairs so far=25945 stamped=18 562s
+[12/15] ba61f0b9 items=454 pairs so far=28161 stamped=21 611s
+[13/15] 42ec0761 items=521 pairs so far=30691 stamped=22 666s
+[14/15] 0ddfec37_abs items=447 pairs so far=32897 stamped=23 713s
+[15/15] 89941a94 items=523 pairs so far=35454 stamped=28 768s
+done: {"questions": 15, "pairs": 35454, "stamped": 28, "items": 7268, "skipped_cos": 99} unique stamped items: 28

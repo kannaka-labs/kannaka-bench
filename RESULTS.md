@@ -1108,4 +1108,49 @@ carries it. GPU work is paused until the qBraid balance is topped up (262.7 cred
 Weights of the union model were not kept. Raw rows, map, pre-pass and training logs, the held-out
 pair decisions and the E-L3b rows in `experiments/laya_reflex/results/e_l3f/`.
 
+## 2026-09-24 — Laya E-L3g: 5-fold cross-validation over all 78 knowledge-update questions (null; +1 of 78)
+
+Pre-registered in `experiments/laya_reflex/README.md` before the run (Nick: "top up qbraid and run
+k-fold"). Five round-robin folds over the sorted ids of every LongMemEval-S knowledge-update question
+(16/16/16/15/15). Per fold: the E-L3d recipe unchanged (write-path shortlist negatives at k=5, 40 per
+positive, positives ×6, 6 epochs, grad-accum 4, from the base Laya checkpoint), trained on the other
+four folds, then the gate-A k=5 pre-pass on the held-out fold; supersede+drop retrieval and answers on
+qwen2.5:14b against the plain arm on the same questions. One L40S pod (no RTX 6000 Ada capacity), 753.9
+credits ≈ $7.54 — most of it the pod idling while the CPU retrieval arms ran; next time run the arms as
+each map lands.
+
+**Write-time reflex, pooled over the five folds (`map_stats.py`):** 97 stamps, **31 of 70 true
+supersessions caught (44%)**, **0 current facts expired**, 66 false stamps. Per fold: 4/14, 7/15, 5/14,
+9/13, 6/14 true catches with 6/21/19/23/28 stamps. E-L3d's own split had read 13/17 (76%): that split was
+the favourable one.
+
+| fold | n | plain | supersede+drop | Δ | evid@15 plain / sup | hit@15 plain / sup |
+|---|---|---|---|---|---|---|
+| 0 | 16 | 11 | 11 | 0 | 0.929 / 0.786 | 1.000 / 1.000 |
+| 1 | 16 | 11 | 12 | +1 | 0.967 / 0.767 | 1.000 / 1.000 |
+| 2 | 16 | 11 | 11 | 0 | 0.893 / 0.750 | 1.000 / 1.000 |
+| 3 | 15 | 9 | 8 | −1 | 0.900 / 0.633 | 0.933 / 0.933 |
+| 4 | 15 | 12 | 13 | +1 | 0.929 / 0.714 | 1.000 / 1.000 |
+| **pooled** | **78** | **54 (0.692)** | **55 (0.705)** | **+1** | 0.924 / 0.729 | 0.987 / 0.987 |
+
+Eleven questions flipped: six to correct under the drop, five to wrong. None of the six gains is the
+same question twice across arms of earlier runs except 01493427 (the postcards count, the E-L3d gain);
+07741c45 (the shoe rack) flips against the drop here as it did in E-L3e k=20 and E-L3f. Evidence
+coverage falls 0.924 → 0.729 by design (LongMemEval labels both the old and the new fact as evidence).
+
+**Predictions against outcome:** pooled answers within ±3 of plain — yes (+1); current facts expired
+≤ 2 — yes (0); ~30 false stamps per 17 questions — roughly (66 per 78 ≈ 14 per 17, fewer). **Decision
+rule: +1 is inside the null band (a gain needed ≥ +4), so the result is null**, and per the
+pre-registration the line is parked.
+
+**What the E-L3 line established, a → g:** a Laya reflex can be trained to stamp supersessions at
+write time with zero collateral on current facts (E-L3d, confirmed across five folds), but it catches
+fewer than half of the true supersessions at that precision, and the answers it changes net to +1 of
+78 with the noise floor at ±1.3 points. The flagship 5K case is caught only by the imprecise E-L3b
+model. The recall-side rule (kannaka-memory #1044: recall drops `expires_at <= as-of`) is the design
+to carry; what stamps `expires_at` in production stays a policy question, not a classifier one.
+Weights not kept. Raw rows, five maps, pre-pass and training logs, manifests and fold lists in
+`experiments/laya_reflex/results/e_l3g/`.
+
+
 

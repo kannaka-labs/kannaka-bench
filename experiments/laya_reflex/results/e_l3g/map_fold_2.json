@@ -1,0 +1,166 @@
+{
+ "threshold": 0.5,
+ "k": 5,
+ "agent_dir": "e_l3g/laya_fold_2",
+ "stats": {
+  "questions": 16,
+  "pairs": 37248,
+  "stamped": 19,
+  "items": 7657,
+  "skipped_cos": 182
+ },
+ "map": {
+  "6c456a5d#2": {
+   "expires": "2023-05-23T13:01:00Z",
+   "expires_src": "2023/05/23 (Tue) 13:01",
+   "by": "answer_a25d4a91_1#2",
+   "p": 0.587,
+   "cos": 0.3112,
+   "question_id": "6a1eabeb"
+  },
+  "answer_3a6f1e82_1#2": {
+   "expires": "2023-11-30T00:36:00Z",
+   "expires_src": "2023/11/30 (Thu) 00:36",
+   "by": "answer_3a6f1e82_2#0",
+   "p": 1.0,
+   "cos": 0.3976,
+   "question_id": "852ce960"
+  },
+  "cffde796#8": {
+   "expires": "2023-05-20T22:11:00Z",
+   "expires_src": "2023/05/20 (Sat) 22:11",
+   "by": "6d6c92fe#8",
+   "p": 1.0,
+   "cos": 0.3946,
+   "question_id": "4d6b87c8"
+  },
+  "answer_766ab8da_1#2": {
+   "expires": "2023-05-22T03:27:00Z",
+   "expires_src": "2023/05/22 (Mon) 03:27",
+   "by": "answer_766ab8da_2#10",
+   "p": 1.0,
+   "cos": 0.4041,
+   "question_id": "4d6b87c8"
+  },
+  "080a4000_2#2": {
+   "expires": "2023-05-15T12:43:00Z",
+   "expires_src": "2023/05/15 (Mon) 12:43",
+   "by": "73a2f346_3#0",
+   "p": 0.7681,
+   "cos": 0.2103,
+   "question_id": "72e3ee87"
+  },
+  "080a4000_2#10": {
+   "expires": "2023-05-15T12:43:00Z",
+   "expires_src": "2023/05/15 (Mon) 12:43",
+   "by": "73a2f346_3#0",
+   "p": 0.7977,
+   "cos": 0.1967,
+   "question_id": "72e3ee87"
+  },
+  "080a4000_2#4": {
+   "expires": "2023-05-15T12:43:00Z",
+   "expires_src": "2023/05/15 (Mon) 12:43",
+   "by": "73a2f346_3#0",
+   "p": 1.0,
+   "cos": 0.192,
+   "question_id": "72e3ee87"
+  },
+  "answer_d7de9a6a_1#0": {
+   "expires": "2023-05-29T03:31:00Z",
+   "expires_src": "2023/05/29 (Mon) 03:31",
+   "by": "answer_d7de9a6a_2#8",
+   "p": 1.0,
+   "cos": 0.3634,
+   "question_id": "72e3ee87"
+  },
+  "1dcfb9a0_1#6": {
+   "expires": "2023-02-24T19:41:00Z",
+   "expires_src": "2023/02/24 (Fri) 19:41",
+   "by": "b1d9eb66_2#0",
+   "p": 0.6467,
+   "cos": 0.6776,
+   "question_id": "b01defab"
+  },
+  "1dcfb9a0_1#8": {
+   "expires": "2023-02-24T19:41:00Z",
+   "expires_src": "2023/02/24 (Fri) 19:41",
+   "by": "b1d9eb66_2#8",
+   "p": 1.0,
+   "cos": 0.497,
+   "question_id": "b01defab"
+  },
+  "a15fe646#0": {
+   "expires": "2023-03-12T21:43:00Z",
+   "expires_src": "2023/03/12 (Sun) 21:43",
+   "by": "1dac88da_1#0",
+   "p": 0.5442,
+   "cos": 0.8756,
+   "question_id": "b01defab"
+  },
+  "answer_8c0712af_1#4": {
+   "expires": "2023-03-30T01:14:00Z",
+   "expires_src": "2023/03/30 (Thu) 01:14",
+   "by": "answer_8c0712af_2#4",
+   "p": 0.9774,
+   "cos": 0.6885,
+   "question_id": "b01defab"
+  },
+  "answer_0cdbca92_1#0": {
+   "expires": "2023-06-30T14:20:00Z",
+   "expires_src": "2023/06/30 (Fri) 14:20",
+   "by": "answer_0cdbca92_2#0",
+   "p": 0.6313,
+   "cos": 0.8056,
+   "question_id": "c7dc5443"
+  },
+  "6b8e8bb3_1#0": {
+   "expires": "2023-07-10T19:09:00Z",
+   "expires_src": "2023/07/10 (Mon) 19:09",
+   "by": "6b8e8bb3_1#0",
+   "p": 0.9999,
+   "cos": 1.0,
+   "question_id": "c7dc5443"
+  },
+  "answer_67be2c38_1#2": {
+   "expires": "2023-11-30T00:28:00Z",
+   "expires_src": "2023/11/30 (Thu) 00:28",
+   "by": "answer_67be2c38_2#8",
+   "p": 0.7332,
+   "cos": 0.5545,
+   "question_id": "10e09553"
+  },
+  "answer_4a97ae40_1#4": {
+   "expires": "2023-05-27T02:31:00Z",
+   "expires_src": "2023/05/27 (Sat) 02:31",
+   "by": "answer_4a97ae40_2#2",
+   "p": 0.5229,
+   "cos": 0.4787,
+   "question_id": "dad224aa"
+  },
+  "156988fe#2": {
+   "expires": "2023-09-29T18:42:00Z",
+   "expires_src": "2023/09/29 (Fri) 18:42",
+   "by": "6446f6e6#6",
+   "p": 1.0,
+   "cos": 0.5369,
+   "question_id": "5c40ec5b"
+  },
+  "cbf48918_1#0": {
+   "expires": "2023-05-21T13:07:00Z",
+   "expires_src": "2023/05/21 (Sun) 13:07",
+   "by": "149e026c_1#0",
+   "p": 0.9998,
+   "cos": 0.3421,
+   "question_id": "0977f2af"
+  },
+  "answer_52382508_abs_1#4": {
+   "expires": "2023-10-15T03:36:00Z",
+   "expires_src": "2023/10/15 (Sun) 03:36",
+   "by": "answer_52382508_abs_2#2",
+   "p": 1.0,
+   "cos": 0.461,
+   "question_id": "2133c1b5_abs"
+  }
+ }
+}

@@ -1,0 +1,48 @@
+Fetching 38 files:   0%|          | 0/38 [00:00<?, ?it/s]Fetching 38 files: 100%|██████████| 38/38 [00:00<00:00, 1224.65it/s]
+2484 training sequences from 2484 rows
+/home/jovyan/e_l3g/train_e_l1b.py:169: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  sched.step()
+  epoch 1/6 step 50 loss 0.7687 reward 0.065 15s
+  epoch 1/6 step 100 loss -0.1782 reward 0.466 29s
+  epoch 1/6 step 150 loss -0.1139 reward 0.747 42s
+  epoch 1/6 step 200 loss 0.0041 reward 0.750 56s
+  epoch 1/6 step 250 loss -0.1285 reward 0.748 70s
+  epoch 1/6 step 300 loss -0.2251 reward 0.750 84s
+=== epoch 1/6 avg loss 0.4930 at 87s ===
+  epoch 2/6 step 50 loss -0.0180 reward 0.750 101s
+  epoch 2/6 step 100 loss 0.0000 reward 0.750 114s
+  epoch 2/6 step 150 loss 0.0000 reward 0.750 128s
+  epoch 2/6 step 200 loss 2.3060 reward -0.495 142s
+  epoch 2/6 step 250 loss -0.0094 reward 0.750 156s
+  epoch 2/6 step 300 loss 0.0738 reward 0.750 170s
+=== epoch 2/6 avg loss 0.3094 at 173s ===
+  epoch 3/6 step 50 loss 0.0000 reward 0.750 187s
+  epoch 3/6 step 100 loss 0.0000 reward 0.750 200s
+  epoch 3/6 step 150 loss 0.0000 reward 0.750 213s
+  epoch 3/6 step 200 loss 0.0042 reward 0.750 227s
+  epoch 3/6 step 250 loss 0.0000 reward 0.750 241s
+  epoch 3/6 step 300 loss 0.0000 reward 0.750 255s
+=== epoch 3/6 avg loss 0.1240 at 258s ===
+  epoch 4/6 step 50 loss 0.0000 reward 0.750 271s
+  epoch 4/6 step 100 loss 0.1294 reward 0.618 285s
+  epoch 4/6 step 150 loss 0.0000 reward 0.750 299s
+  epoch 4/6 step 200 loss 0.0000 reward 0.750 313s
+  epoch 4/6 step 250 loss 2.9077 reward -0.495 327s
+  epoch 4/6 step 300 loss 0.0000 reward 0.750 340s
+=== epoch 4/6 avg loss 0.1154 at 343s ===
+  epoch 5/6 step 50 loss 0.0000 reward 0.750 357s
+  epoch 5/6 step 100 loss 0.0000 reward 0.750 371s
+  epoch 5/6 step 150 loss 0.0000 reward 0.750 385s
+  epoch 5/6 step 200 loss 0.0000 reward 0.750 399s
+  epoch 5/6 step 250 loss 0.0000 reward 0.750 413s
+  epoch 5/6 step 300 loss 0.0000 reward 0.750 427s
+=== epoch 5/6 avg loss 0.0320 at 430s ===
+  epoch 6/6 step 50 loss 0.0000 reward 0.750 444s
+  epoch 6/6 step 100 loss 0.0000 reward 0.750 458s
+  epoch 6/6 step 150 loss 0.0000 reward 0.750 472s
+  epoch 6/6 step 200 loss 0.0000 reward 0.750 486s
+  epoch 6/6 step 250 loss 0.0000 reward 0.750 499s
+  epoch 6/6 step 300 loss 0.0000 reward 0.750 513s
+=== epoch 6/6 avg loss 0.0244 at 516s ===
+fitted temperatures (choice, score, noul): [1.637, 1.251, 1.0]
+saved to e_l3g/laya_fold_1 after 522s
