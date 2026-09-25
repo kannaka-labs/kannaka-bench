@@ -1,0 +1,53 @@
+{
+ "run_id": "locomo-k15",
+ "started_at": "2026-09-25T19:42:11.524431+00:00",
+ "commit": "1aa45de1b74c2966a634c1ca33334c816d919e00",
+ "dataset": {
+  "dataset": "locomo10",
+  "path": "/home/nick/.kannaka-bench/data/locomo10.json",
+  "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "conversations": 10
+ },
+ "adapters": [
+  "kannaka_minilm",
+  "vector_numpy",
+  "recency"
+ ],
+ "k": 15,
+ "session_cap": 0,
+ "limit": null,
+ "max_items": 0,
+ "consolidate": false,
+ "host": "nick-debain2",
+ "platform": "Linux-6.12.107+deb13-amd64-x86_64-with-glibc2.41",
+ "python": "3.13.5",
+ "cpu_count": 20,
+ "stores": 10,
+ "shard": null,
+ "stores_total": 10,
+ "adapter_versions": {
+  "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+ },
+ "kannaka_flags": {
+  "kannaka_minilm": {},
+  "vector_numpy": {},
+  "recency": {}
+ },
+ "adapter_bins": {
+  "kannaka_minilm": {
+   "path": "/home/nick/src/kannaka-memory-batch/target/release/kannaka",
+   "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+  }
+ },
+ "beam": {
+  "kannaka_minilm": {
+   "recalls": 0,
+   "scored": 0,
+   "total": 0,
+   "mean_coverage": null,
+   "enabled_env": ""
+  }
+ },
+ "finished_at": "2026-09-25T20:04:21.758443+00:00",
+ "wall_s": 1330.2
+}

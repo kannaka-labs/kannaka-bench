@@ -280,6 +280,13 @@ def test_stats_intervals_and_pairing():
     sub = stats.analyse(rows, ("X", "Y"), ids={"q0", "q1"}, n_boot=500)
     assert sub["overall"]["X"]["n"] == 2
     assert "hit@k" in stats.render(res, ("X", "Y"))
+    # --at-k rescores from the ranked hits: gold at rank 3 is a hit at 3, a miss at 2
+    r = {"adapter": "Z", "question_id": "t", "qtype": "a", "gold": ["D1:3"], "gold_level": "turn", "k": 15,
+         "hits": ["D1:1", "D1:2", "D1:3"], "any_hit_at_k": True, "recall_at_k": 1.0, "mrr": 1 / 3,
+         "evidence_coverage_at_k": 1.0}
+    assert stats.at_k([r], 3)[0]["any_hit_at_k"] is True and stats.at_k([r], 2)[0]["any_hit_at_k"] is False
+    assert stats.at_k([r], 2)[0]["recall_at_k"] == 0.0 and stats.at_k([r], 2)[0]["mrr"] == 0.0
+    assert stats.at_k([r], 2)[0]["evidence_coverage_at_k"] is None
 
 
 def test_longmemeval_load_by_ids_and_stream():
