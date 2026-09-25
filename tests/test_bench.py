@@ -314,6 +314,88 @@ def test_longmemeval_load_by_ids_and_stream():
             longmemeval.DATA_DIR, longmemeval.STREAM_BYTES = old_dir, old_bytes
 
 
+class _FakePg:
+    """Just enough of a psycopg connection for the pgvector adapter: it keeps
+    each table's rows and answers the ORDER BY emb <=> q LIMIT k query with
+    exact cosine, so the test checks the adapter's SQL, literals, attribution
+    and cleanup without a server."""
+    def __init__(self):
+        self.tables, self.log = {}, []
+
+    def cursor(self):
+        return _FakeCur(self)
+
+
+class _FakeCur:
+    def __init__(self, db):
+        self.db, self.out = db, []
+
+    def execute(self, sql, params=()):
+        import re
+        self.db.log.append(sql)
+        if sql.startswith("SELECT current_setting"):
+            self.out = [("16.4", "0.8.0")]
+        elif sql.startswith("SHOW hnsw.ef_search"):
+            self.out = [("40",)]
+        elif sql.startswith("DROP TABLE"):
+            self.db.tables.pop(sql.split()[-1], None)
+        elif sql.startswith("CREATE TABLE"):
+            self.db.tables[sql.split()[2]] = []
+        elif sql.startswith("INSERT INTO"):
+            v = [float(x) for x in params[2].strip("[]").split(",")]
+            self.db.tables[sql.split()[2]].append((params[0], params[1], v))
+        elif sql.startswith("SELECT item_id"):
+            t = re.search(r"FROM (\S+)", sql).group(1)
+            q = [float(x) for x in params[0].strip("[]").split(",")]
+            cos = lambda v: sum(a * b for a, b in zip(v, q))
+            rows = sorted(self.db.tables[t], key=lambda r: -cos(r[2]))[: params[2]]
+            self.out = [(r[0], cos(r[2]), r[1][:200]) for r in rows]
+        elif sql.startswith("SELECT pg_total_relation_size"):
+            self.out = [(8192 * len(self.db.tables.get(params[0], [])),)]
+        else:
+            self.out = []
+
+    def fetchone(self):
+        return self.out[0] if self.out else None
+
+    def fetchall(self):
+        return self.out
+
+
+def _bow_encoder():
+    import numpy as np
+    vocab = ["kayak", "bought", "weather", "fine", "gps", "car", "degree"]
+
+    class E:
+        def encode(self, texts, **kw):
+            m = np.array([[t.lower().count(w) + 0.01 for w in vocab] for t in texts], dtype=float)
+            return m / np.linalg.norm(m, axis=1, keepdims=True)
+    return E()
+
+
+def test_pgvector_adapter_attributes_by_item_id_and_cleans_up():
+    from bench.adapters.pgvector import PgvectorAdapter, PgvectorExactAdapter, vec_literal
+    assert vec_literal([0.1, -2.0]) == "[0.1,-2.0]"          # full precision, pgvector text form
+    for cls, idx in ((PgvectorAdapter, True), (PgvectorExactAdapter, False)):
+        db = _FakePg()
+        ad = cls(connect=lambda: db, encoder=_bow_encoder())
+        with tempfile.TemporaryDirectory() as d:
+            ad.open(os.path.join(d, "q1"))
+            ad.ingest([MemoryItem(id="s1#0", text="I bought a kayak"),
+                       MemoryItem(id="s2#0", text="the weather is fine"),
+                       MemoryItem(id="s3#0", text="my car GPS broke")])
+            hits = ad.recall("which kayak did I buy", 2)
+            assert [h.id for h in hits][0] == "s1#0", hits
+            assert len(hits) == 2 and hits[0].score >= hits[1].score
+            assert ad.footprint_bytes() == 3 * 8192
+            assert ad.ingest_stats() == {"llm_calls": 0, "dropped_turns": 0, "ingest_errors": 0}
+            assert ad.describe()["index"] == ("hnsw" if idx else "none")
+            assert any("USING hnsw" in q for q in db.log) is idx      # the index arm indexes, the control does not
+            assert sum(1 for q in db.log if q.startswith("INSERT")) == 3   # one INSERT per turn
+            ad.close()
+            assert db.tables == {}, db.tables                        # nothing left in the database
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
