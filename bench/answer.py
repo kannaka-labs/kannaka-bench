@@ -288,6 +288,31 @@ def expand_pairs(hit_ids, by_id):
     return keep
 
 
+def native_items(row, k: int):
+    """What a rewriting adapter (Mem0) itself returned: its stored memory text,
+    dated where it kept the date, in chronological order like every other
+    excerpt list. None when the row carries no text (an older run, or an
+    adapter that stores the dataset's own items)."""
+    from datetime import datetime
+    from types import SimpleNamespace
+    texts = row.get("hit_texts")
+    if texts is None:
+        return None
+    whens = row.get("hit_whens") or [None] * len(texts)
+    out = []
+    for i, (t, w) in enumerate(zip(texts[:k], whens[:k])):
+        dt = None
+        if w:
+            try:
+                dt = datetime.fromisoformat(w)
+            except ValueError:
+                dt = None
+        out.append(SimpleNamespace(id=f"native#{i}", text=t, when=dt))
+    far = __import__("datetime").datetime.min.replace(tzinfo=__import__("datetime").timezone.utc)
+    out.sort(key=lambda it: (it.when or far, _turn_key(it.id)))
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run", required=True)
@@ -301,6 +326,9 @@ def main(argv=None):
     ap.add_argument("--per-session", type=int, default=1,
                     help="turns per hit session shown to the model, filled from the row's candidates (default 1)")
     ap.add_argument("--max-excerpts", type=int, default=40, help="cap on excerpts before pair expansion")
+    ap.add_argument("--native-text", action="store_true",
+                    help="for rows that carry hit_texts (Mem0), answer from the adapter's OWN returned "
+                         "memory text instead of the dataset turns its ids point to; rows without it are skipped")
     ap.add_argument("--route", choices=("question", "qtype"), default="question",
                     help="how to pick the system prompt: from the question text (default, deployable) "
                          "or from the dataset's gold qtype label (pre-v4 behaviour, for comparison)")
@@ -340,7 +368,14 @@ def main(argv=None):
             continue
         q, by_id, items = qmap[r["question_id"]]
         k = a.k or r["k"]
-        if r["adapter"] in full:
+        native = native_items(r, k) if a.native_text else None
+        if a.native_text and native is None:
+            continue
+        if native is not None:
+            ctx_items = native
+            text = format_excerpts(ctx_items, r["gold_level"])
+            mode = f"native-top-{k}"
+        elif r["adapter"] in full:
             ctx_items = items
             text = format_excerpts(ctx_items, r["gold_level"])
             if len(text) > FULL_CONTEXT_CHAR_CAP:

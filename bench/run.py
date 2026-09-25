@@ -115,6 +115,14 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
     ingest_ms = (time.perf_counter() - t0) * 1000.0
     per_item = ingest_ms / max(1, len(items))
     footprint = adapter.footprint_bytes()
+    # Per STORE, on the row. The manifest used to keep only the last store's
+    # stats (each open() resets the counters and each store overwrote the key),
+    # so a 30-question Mem0 run would have reported one question's LLM calls.
+    ingest_stats = adapter.ingest_stats() if hasattr(adapter, "ingest_stats") else None
+    # An adapter that stores REWRITTEN text (Mem0 stores extracted facts, not
+    # turns) returns content the dataset does not hold; keep it on the row so
+    # the answer stage can be run on what the system itself would hand an LLM.
+    keep_text = bool(getattr(adapter, "rewrites", False))
     # Many questions on one store (LoCoMo): one process when the adapter can.
     if len(questions) > 1 and hasattr(adapter, "recall_many"):
         t0 = time.perf_counter()
@@ -147,8 +155,12 @@ def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: s
             "recall_at_k": metrics.recall_at_k(ids, q.gold_ids, level, k),
             "mrr": metrics.mrr(ids, q.gold_ids, level),
             "recall_ms": round(ms, 2), "ingest_ms_per_item": round(per_item, 3),
+            "ingest_s": round(ingest_ms / 1000.0, 1), "ingest_stats": ingest_stats,
             "footprint_bytes": footprint,
         })
+        if keep_text:
+            rows[-1]["hit_texts"] = [x.text for x in hits]
+            rows[-1]["hit_whens"] = [x.when for x in hits]
     adapter.close()
 
 
@@ -283,8 +295,12 @@ def main(argv=None):
                 # Mem0 spends an LLM call per ingested turn and can drop turns
                 # in extraction; every other adapter ingests free and lossless.
                 # Without these columns its row reads as like-for-like.
+                # Summed over stores (each open() resets the adapter's counters);
+                # the per-store numbers are on every row as `ingest_stats`.
                 if hasattr(ad, "ingest_stats"):
-                    manifest.setdefault("ingest_stats", {})[n] = ad.ingest_stats()
+                    tot = manifest.setdefault("ingest_stats", {}).setdefault(n, {})
+                    for key, v in ad.ingest_stats().items():
+                        tot[key] = tot.get(key, 0) + v
                 print(f"[{si + 1}/{len(stores)}] {sid}: {n} done in "
                       f"{time.perf_counter() - t_ad:.1f}s", flush=True)
             except Exception as e:

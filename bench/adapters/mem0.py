@@ -69,6 +69,9 @@ USER = "bench"
 
 class Mem0Adapter(Adapter):
     name = "mem0"
+    # Stores extracted facts, not turns: run.py keeps the returned memory text
+    # on each row so answers can also be graded on what Mem0 itself returns.
+    rewrites = True
 
     def __init__(self):
         self.dir = None
@@ -204,7 +207,8 @@ class Mem0Adapter(Adapter):
                 continue
             seen.add(iid)
             out.append(RecallHit(id=iid, score=float(h.get("score") or 0.0),
-                                 text=str(h.get("memory") or "")[:200]))
+                                 text=str(h.get("memory") or "")[:2000],
+                                 when=md.get("when")))
         return out[:k]
 
     def ingest_stats(self) -> dict:

@@ -27,6 +27,10 @@ class RecallHit:
     id: str
     score: float
     text: str = ""
+    # When the adapter knows when the recalled content was said (ISO date).
+    # Only adapters that REWRITE what they store (Mem0) fill it: their hit
+    # text is not a dataset item, so the answer stage cannot look the date up.
+    when: str | None = None
 
 
 class Adapter:

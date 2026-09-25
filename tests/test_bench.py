@@ -313,6 +313,56 @@ def test_longmemeval_load_by_ids_and_stream():
         finally:
             longmemeval.DATA_DIR, longmemeval.STREAM_BYTES = old_dir, old_bytes
 
+def test_rewriting_adapter_rows_keep_per_store_ingest_stats_and_text():
+    """Mem0-shaped adapter: counters reset per open(), text is its own. Each
+    row must carry ITS store's stats (the manifest used to keep only the last
+    store's), and the returned memory text + date must survive onto the row."""
+    from bench import run as runmod
+    from bench.adapters.base import Adapter, RecallHit
+
+    class Rewriter(Adapter):
+        name = "rewriter"
+        rewrites = True
+
+        def open(self, run_dir):
+            self.n = 0
+
+        def ingest(self, items):
+            for it in items:
+                self.n += 1
+            self.items = list(items)
+
+        def recall(self, query, k, when=None):
+            return [RecallHit(id=it.id, score=1.0, text="FACT " + it.id, when="2023-05-01T00:00:00+00:00")
+                    for it in self.items[:k]]
+
+        def ingest_stats(self):
+            return {"llm_calls": self.n}
+
+    with tempfile.TemporaryDirectory() as d:
+        qs = longmemeval.questions_from(LME)
+        rows = []
+        ad = Rewriter()
+        runmod.run_store(ad, os.path.join(d, "a"), qs[0].items, qs[:1], 2, "session", rows, "fixture")
+        runmod.run_store(ad, os.path.join(d, "b"), qs[0].items[:1], qs[:1], 2, "session", rows, "fixture")
+        assert rows[0]["ingest_stats"] == {"llm_calls": len(qs[0].items)}, rows[0]["ingest_stats"]
+        assert rows[1]["ingest_stats"] == {"llm_calls": 1}, rows[1]["ingest_stats"]
+        assert rows[0]["hit_texts"][0].startswith("FACT "), rows[0]
+        assert rows[0]["hit_whens"][0].startswith("2023-05-01")
+        # an adapter that stores the dataset's own items carries no text
+        rows2 = []
+        runmod.run_store(RecencyAdapter(), os.path.join(d, "c"), qs[0].items, qs[:1], 2, "session", rows2, "fixture")
+        assert "hit_texts" not in rows2[0] and rows2[0]["ingest_stats"] is None
+
+
+def test_answer_native_items_uses_the_adapters_own_text_in_date_order():
+    from bench import answer
+    row = {"hit_texts": ["later fact", "earlier fact", "undated"],
+           "hit_whens": ["2023-06-01T00:00:00+00:00", "2023-01-01T00:00:00+00:00", None]}
+    got = answer.native_items(row, 2)            # k cuts BEFORE the date sort
+    assert [it.text for it in got] == ["earlier fact", "later fact"], [it.text for it in got]
+    assert answer.native_items({"hits": ["s#0"]}, 5) is None
+
 
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
