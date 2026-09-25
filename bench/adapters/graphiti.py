@@ -27,6 +27,11 @@ cut to k. A fact merged from several turns therefore credits all of them —
 the fair reading of a system that consolidates. A turn from which no fact was
 extracted can never be recalled: counted as `dropped_turns`.
 
+Backend: Kuzu, embedded. ⚠ graphiti-core marks its Kuzu backend deprecated
+(upstream Kuzu is unmaintained) in favour of Neo4j/FalkorDB; it is used here
+because it needs no server and one directory per store isolates questions.
+Its full-text indexes must be created by the caller (see `_kuzu_fulltext`).
+
 Search: `Graphiti.search()` — the documented default (hybrid BM25 + cosine
 over facts, reciprocal-rank fusion; no cross-encoder, so no LLM at recall).
 Encoder held fixed: `OpenAIEmbedder` pointed at the bench embed server
@@ -130,8 +135,30 @@ class GraphitiAdapter(Adapter):
         # the constructor does not build its default OpenAI reranker.
         rer = OpenAIRerankerClient(config=cfg, client=raw)
         driver = KuzuDriver(db=os.path.join(self.dir, "graph.kuzu"))
+        self._kuzu_fulltext(driver)
         self.g = Graphiti(graph_driver=driver, llm_client=llm, embedder=emb, cross_encoder=rer)
         self._run(self.g.build_indices_and_constraints())
+
+    @staticmethod
+    def _kuzu_fulltext(driver) -> None:
+        """Create Graphiti's full-text indexes on Kuzu. ⚠ graphiti-core 0.30.2's
+        `KuzuDriver.build_indices_and_constraints()` is a no-op and `setup_schema`
+        creates no FTS index, so out of the box every BM25 query fails
+        ("Table RelatesToNode_ doesn't have an index with name
+        edge_name_and_fact"), the error is logged and swallowed, and search
+        silently degrades to cosine-only — for entity dedup at ingest as well
+        as for recall. Found on the first pricing run; creating the indexes
+        Graphiti's own `get_fulltext_indices(KUZU)` lists restores the hybrid
+        search it is designed around. Fail loudly if that is not possible."""
+        import kuzu
+        from graphiti_core.driver.driver import GraphProvider
+        from graphiti_core.graph_queries import get_fulltext_indices
+        conn = kuzu.Connection(driver.db)
+        conn.execute("INSTALL fts")
+        conn.execute("LOAD fts")
+        for q in get_fulltext_indices(GraphProvider.KUZU):
+            conn.execute(q)
+        conn.close()
 
     def ingest(self, items: Iterable[MemoryItem]) -> None:
         from graphiti_core.nodes import EpisodeType
