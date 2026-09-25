@@ -47,7 +47,14 @@ One interface (`bench/adapters/base.py`): `ingest(items)`, `recall(query, k)`,
 ```
 python -m bench.run --dataset longmemeval_oracle --adapters kannaka,vector_numpy,recency --k 5 --limit 50 --out results/
 python -m bench.report results/<run>/
+python -m bench.stats results/<run>/ --pair kannaka_minilm,vector_numpy   # 95% CIs + paired differences
 ```
+
+Big runs split by store and merge afterwards: `--shard I/N` on each process,
+then `python -m bench.merge results/<run> results/<run>-shard0 ...`.
+`--drop-stores` deletes each store once scored (LongMemEval-M stores are
+~0.5 GB each); `longmemeval_m` (~2.7 GB) is streamed with `ijson` instead of
+loaded whole.
 
 A run writes `manifest.json` (commit, adapters, dataset sha256, hardware, args) and
 `results.jsonl` (one row per question per adapter). `report` prints the table.
