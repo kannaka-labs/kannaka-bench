@@ -1,0 +1,73 @@
+== kannaka_minilm: n M=30 S=30
+   hit@k     S 1.000  M 0.933  M-S -0.067 [-0.167, +0.000] (M better 0 / worse 2 / tie 28)
+   recall@k  S 0.983  M 0.853  M-S -0.131 [-0.242, -0.039] (M better 0 / worse 6 / tie 24)
+   evid@k    S 0.883  M 0.700  M-S -0.183 [-0.294, -0.083] (M better 0 / worse 9 / tie 21)
+   MRR       S 0.932  M 0.689  M-S -0.243 [-0.382, -0.118] (M better 0 / worse 11 / tie 19)
+   S: items/q 499  recall p50 745 ms p95 1098  ingest 50.3 ms/item  bytes/item 45603  store 22.7 MB
+   M: items/q 4921  recall p50 10838 ms p95 18493  ingest 65.7 ms/item  bytes/item 42617  store 209.7 MB
+     moved ('d3ab962e', 'multi-session', (True, 0.5), (False, 0.0))
+     moved ('4f54b7c9', 'multi-session', (True, 1.0), (True, 0.5))
+     moved ('gpt4_59149c77', 'temporal-reasoning', (True, 1.0), (True, 0.5))
+     moved ('06878be2', 'single-session-preference', (True, 0.3333333333333333), (True, 0.0))
+     moved ('c4f10528', 'single-session-assistant', (True, 1.0), (True, 0.0))
+     moved ('e47becba', 'single-session-user', (True, 0.5), (False, 0.0))
+     moved ('945e3d21', 'knowledge-update', (True, 1.0), (True, 0.5))
+     moved ('gpt4_f49edff3', 'temporal-reasoning', (True, 1.0), (True, 0.3333333333333333))
+     moved ('75832dbd', 'single-session-preference', (True, 1.0), (True, 0.0))
+== vector_numpy: n M=30 S=30
+   hit@k     S 1.000  M 0.900  M-S -0.100 [-0.200, +0.000] (M better 0 / worse 3 / tie 27)
+   recall@k  S 0.983  M 0.819  M-S -0.164 [-0.289, -0.056] (M better 0 / worse 7 / tie 23)
+   evid@k    S 0.844  M 0.700  M-S -0.144 [-0.250, -0.056] (M better 0 / worse 7 / tie 23)
+   MRR       S 0.934  M 0.673  M-S -0.262 [-0.402, -0.137] (M better 0 / worse 11 / tie 19)
+   S: items/q 499  recall p50 15 ms p95 38  ingest 55.9 ms/item  bytes/item 1556  store 0.8 MB
+   M: items/q 4921  recall p50 18 ms p95 38  ingest 56.0 ms/item  bytes/item 1555  store 7.7 MB
+     moved ('d3ab962e', 'multi-session', (True, 0.5), (False, 0.0))
+     moved ('gpt4_59149c77', 'temporal-reasoning', (True, 1.0), (True, 0.5))
+     moved ('06878be2', 'single-session-preference', (True, 0.6666666666666666), (True, 0.0))
+     moved ('c4f10528', 'single-session-assistant', (True, 1.0), (True, 0.0))
+     moved ('e47becba', 'single-session-user', (True, 0.5), (False, 0.0))
+     moved ('945e3d21', 'knowledge-update', (True, 1.0), (True, 0.5))
+     moved ('gpt4_f49edff3', 'temporal-reasoning', (True, 1.0), (True, 0.3333333333333333))
+     moved ('75832dbd', 'single-session-preference', (True, 0.0), (False, 0.0))
+== recency: n M=30 S=30
+   hit@k     S 0.167  M 0.000  M-S -0.167 [-0.300, -0.033] (M better 0 / worse 5 / tie 25)
+   recall@k  S 0.125  M 0.000  M-S -0.125 [-0.242, -0.025] (M better 0 / worse 5 / tie 25)
+   evid@k    S 0.097  M 0.000  M-S -0.097 [-0.200, -0.013] (M better 0 / worse 4 / tie 26)
+   MRR       S 0.106  M 0.000  M-S -0.106 [-0.217, -0.006] (M better 0 / worse 5 / tie 25)
+   S: items/q 499  recall p50 0 ms p95 0  ingest 0.0 ms/item  bytes/item 1046  store 0.5 MB
+   M: items/q 4921  recall p50 0 ms p95 0  ingest 0.0 ms/item  bytes/item 1047  store 5.2 MB
+     moved ('4c36ccef', 'single-session-assistant', (True, 1.0), (False, 0.0))
+     moved ('6aeb4375', 'knowledge-update', (True, 0.5), (False, 0.0))
+     moved ('71017276', 'temporal-reasoning', (True, 1.0), (False, 0.0))
+     moved ('e47becba', 'single-session-user', (True, 0.0), (False, 0.0))
+     moved ('b46e15ed', 'temporal-reasoning', (True, 0.4), (False, 0.0))
+   M kannaka e47becba 4738 8555 ms 52.2 ms/item
+   M kannaka gpt4_fa19884c 4766 10189 ms 54.2 ms/item
+   M kannaka gpt4_59149c77 4778 10083 ms 55.6 ms/item
+   M kannaka c4f10528 4783 9974 ms 53.8 ms/item
+   M kannaka 58bf7951 4810 8822 ms 53.6 ms/item
+   M kannaka gpt4_f49edff3 4826 9999 ms 56.5 ms/item
+   M kannaka 89527b6b 4847 10054 ms 52.7 ms/item
+   M kannaka 6a1eabeb 4854 15546 ms 122.8 ms/item
+   M kannaka 852ce960 4856 11173 ms 57.0 ms/item
+   M kannaka e9327a54 4877 10759 ms 53.0 ms/item
+   M kannaka 8a2466db 4887 11147 ms 54.2 ms/item
+   M kannaka 0edc2aef 4899 10663 ms 44.6 ms/item
+   M kannaka 35a27287 4903 10817 ms 45.4 ms/item
+   M kannaka cc06de0d 4907 22311 ms 109.8 ms/item
+   M kannaka 830ce83f 4910 12253 ms 110.7 ms/item
+   M kannaka 1e043500 4913 12136 ms 53.7 ms/item
+   M kannaka 118b2229 4915 10411 ms 57.0 ms/item
+   M kannaka 945e3d21 4932 10732 ms 57.5 ms/item
+   M kannaka 75832dbd 4940 10338 ms 54.5 ms/item
+   M kannaka 51a45a95 4941 11014 ms 55.9 ms/item
+   M kannaka 4f54b7c9 4952 16553 ms 124.7 ms/item
+   M kannaka a11281a2 4977 20081 ms 107.0 ms/item
+   M kannaka 06878be2 4987 11537 ms 54.3 ms/item
+   M kannaka d3ab962e 4991 10820 ms 53.5 ms/item
+   M kannaka b46e15ed 5027 11623 ms 53.5 ms/item
+   M kannaka 71017276 5055 12031 ms 53.8 ms/item
+   M kannaka 7161e7e2 5057 11450 ms 54.3 ms/item
+   M kannaka 2311e44b 5059 10855 ms 52.7 ms/item
+   M kannaka 6aeb4375 5072 14423 ms 110.5 ms/item
+   M kannaka 4c36ccef 5164 9657 ms 52.5 ms/item
