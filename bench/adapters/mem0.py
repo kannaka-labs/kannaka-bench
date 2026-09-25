@@ -157,8 +157,17 @@ class Mem0Adapter(Adapter):
             # up in our table as Mem0 ranking badly when in fact our harness
             # threw the turn away. Retries are counted separately so the
             # instability stays visible instead of being papered over.
+            # MEASURED on the scored run 2026-09-25 (mem0 2.2.1, qwen2.5:7b):
+            # the other failure is an HTTP 500 "token repeat limit reached" —
+            # the model loops and ollama aborts it. At temperature 0 a retry
+            # replays the same loop, so the retry RE-SAMPLES at
+            # BENCH_MEM0_RETRY_TEMP (default 0.7) and restores 0 afterwards.
+            # Only a turn that failed once ever sees a nonzero temperature.
             err = None
             for attempt in (1, 2):
+                cfg = getattr(getattr(self.m, "llm", None), "config", None)
+                if attempt == 2 and cfg is not None:
+                    cfg.temperature = float(os.environ.get("BENCH_MEM0_RETRY_TEMP", "0.7"))
                 try:
                     r = self.m.add([{"role": "user", "content": text[:4000]}],
                                    user_id=USER, metadata=meta)
@@ -175,6 +184,9 @@ class Mem0Adapter(Adapter):
                 except Exception as e:  # noqa: BLE001
                     err = e
                     self.llm_calls += 1   # the call was spent either way
+                finally:
+                    if attempt == 2 and cfg is not None:
+                        cfg.temperature = 0.0
             if err is not None:
                 # One bad turn must not lose the question, but a silent skip
                 # would understate ingest loss — count and say so. The message
