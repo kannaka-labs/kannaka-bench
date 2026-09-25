@@ -335,7 +335,7 @@ class _FakeCur:
         self.db.log.append(sql)
         if sql.startswith("SELECT current_setting"):
             self.out = [("16.4", "0.8.0")]
-        elif sql.startswith("SHOW hnsw.ef_search"):
+        elif sql.startswith("SELECT current_setting('hnsw.ef_search'"):
             self.out = [("40",)]
         elif sql.startswith("DROP TABLE"):
             self.db.tables.pop(sql.split()[-1], None)
@@ -390,6 +390,7 @@ def test_pgvector_adapter_attributes_by_item_id_and_cleans_up():
             assert ad.footprint_bytes() == 3 * 8192
             assert ad.ingest_stats() == {"llm_calls": 0, "dropped_turns": 0, "ingest_errors": 0}
             assert ad.describe()["index"] == ("hnsw" if idx else "none")
+            assert ad.describe()["ef_search"] == (40 if idx else None)
             assert any("USING hnsw" in q for q in db.log) is idx      # the index arm indexes, the control does not
             assert sum(1 for q in db.log if q.startswith("INSERT")) == 3   # one INSERT per turn
             ad.close()

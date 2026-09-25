@@ -85,11 +85,18 @@ class PgvectorAdapter(Adapter):
             ef = os.environ.get("BENCH_PG_EF_SEARCH")
             if ef and self.index == "hnsw":
                 cur.execute(f"SET hnsw.ef_search = {int(ef)}")
-            if self.index == "hnsw":
-                cur.execute("SHOW hnsw.ef_search")
-                r = cur.fetchone()
-                self.ef_search = int(r[0]) if r else None
         return self.conn
+
+    def _read_ef_search(self, cur) -> None:
+        # `hnsw.ef_search` only exists once the extension's library is loaded
+        # in this session (a plain SHOW before the first index use raises
+        # "unrecognized configuration parameter"), so it is read after the
+        # first HNSW query; NULL there means the server default, 40.
+        if self.index != "hnsw" or self.ef_search is not None:
+            return
+        cur.execute("SELECT current_setting('hnsw.ef_search', true)")
+        r = cur.fetchone()
+        self.ef_search = int(r[0]) if r and r[0] else 40
 
     # -- adapter --------------------------------------------------------
     def open(self, run_dir: str) -> None:
@@ -132,7 +139,9 @@ class PgvectorAdapter(Adapter):
         cur = self._conn().cursor()
         cur.execute(f"SELECT item_id, 1 - (emb <=> %s::vector) AS score, left(body, 200) FROM {self.table} "
                     f"ORDER BY emb <=> %s::vector LIMIT %s", (q, q, int(k)))
-        return [RecallHit(id=r[0], score=float(r[1]), text=r[2] or "") for r in cur.fetchall()]
+        out = [RecallHit(id=r[0], score=float(r[1]), text=r[2] or "") for r in cur.fetchall()]
+        self._read_ef_search(cur)
+        return out
 
     def footprint_bytes(self) -> int:
         if self.dim is None:
