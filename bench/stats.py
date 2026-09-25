@@ -17,6 +17,8 @@ cannot say which differences are real.
 Only scored rows count (no error, non-empty gold), as in `report.py`; evid@k
 only where the question has turn-level evidence (LongMemEval has_answer).
 `--ids` restricts to the question ids listed in a file (e.g. the old n=30).
+`--at-k K` rescores hit / recall / MRR at a smaller K from each row's stored
+ranked `hits` (evid@k needs the dataset and is dropped there).
 """
 from __future__ import annotations
 
@@ -97,6 +99,23 @@ def paired(a: dict[str, dict], b: dict[str, dict], m: str, n_boot: int, seed: in
             "ties": sum(1 for x in d if abs(x) <= 1e-12)}
 
 
+def at_k(rows: list[dict], k: int) -> list[dict]:
+    """Rescore rows at a smaller k from their ranked hits (hits are stored to the run's k)."""
+    from . import metrics
+    out = []
+    for r in rows:
+        if "error" in r or not r.get("gold"):
+            out.append(r)
+            continue
+        if k > r["k"]:
+            raise ValueError(f"--at-k {k} > the run's k {r['k']}")
+        g, lvl, h = set(r["gold"]), r.get("gold_level", "session"), r["hits"][:k]
+        out.append(dict(r, k=k, any_hit_at_k=metrics.any_hit_at_k(h, g, lvl, k),
+                        recall_at_k=metrics.recall_at_k(h, g, lvl, k), mrr=metrics.mrr(h, g, lvl),
+                        evidence_coverage_at_k=None))
+    return out
+
+
 def analyse(rows: list[dict], pair: tuple[str, str] | None = None, ids: set[str] | None = None,
             n_boot: int = 10000, seed: int = 0) -> dict:
     by_ad = scored_rows(rows, ids)
@@ -147,7 +166,7 @@ def render(res: dict, pair: tuple[str, str] | None = None) -> str:
                 cells.append(f"{_fmt(s[m])} n={s['n']}" if s and s.get(m) else "n/a")
             L.append(f"| {t} | " + " | ".join(cells) + " |")
     if pair and res["paired"]:
-        L += ["", f"paired {pair[0]} − {pair[1]} (mean diff [95% CI], * = excludes 0; {pair[0]} better / worse / tie):", "",
+        L += ["", f"paired {pair[0]} - {pair[1]} (mean diff [95% CI], * = excludes 0; {pair[0]} better / worse / tie):", "",
               "| scope | " + " | ".join(SHORT[m] for m in METRICS) + " |", "|---|" + "---|" * len(METRICS),
               "| all | " + " | ".join(_fmt_d(res["paired"][m]) for m in METRICS) + " |"]
         for t, pm in res["paired_by_type"].items():
@@ -163,15 +182,18 @@ def main(argv=None):
     ap.add_argument("--boot", type=int, default=10000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--json", default=None, help="also write the numbers here")
+    ap.add_argument("--at-k", type=int, default=None, help="rescore hit/recall/MRR at this smaller k")
     a = ap.parse_args(argv)
     rows = [json.loads(l) for l in open(os.path.join(a.run, "results.jsonl"), encoding="utf-8") if l.strip()]
     ids = {l.strip() for l in open(a.ids, encoding="utf-8") if l.strip()} if a.ids else None
+    if a.at_k:
+        rows = at_k(rows, a.at_k)
     pair = tuple(a.pair.split(",")) if a.pair else None
     res = analyse(rows, pair, ids, a.boot, a.seed)
     print(render(res, pair))
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
-            json.dump({"run": os.path.basename(os.path.normpath(a.run)), "pair": pair, "ids": a.ids,
+            json.dump({"run": os.path.basename(os.path.normpath(a.run)), "pair": pair, "ids": a.ids, "at_k": a.at_k,
                        "boot": a.boot, "seed": a.seed, **res}, f, indent=1)
     return 0
 

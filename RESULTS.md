@@ -1154,3 +1154,55 @@ Weights not kept. Raw rows, five maps, pre-pass and training logs, manifests and
 
 
 
+
+## 2026-09-25 — LoCoMo, all 1,986 questions, k=15: the medium ties exact cosine (first LoCoMo row)
+
+LoCoMo (snap-research `locomo10.json`, sha256 `79fa87e9…`): ten long two-person conversations
+(369–689 turns each), one store per conversation, one item per turn (`Speaker: text`, image
+captions appended, session date), gold = the annotated evidence turns (`D3:13`), so hit and
+recall are **turn-level** (recall@k is evidence coverage here). Standard setting: k=15, facets
+off, MiniLM through `bench/embed_server.py` for kannaka and in-process for cosine — the same
+weights. Binary `kannaka 0.16.10`, sha256 `2ddc7aec…` (the build behind the standard
+`longmemeval_s` row). Run `results/locomo-k15/` (debain2, 20 cores, commit `1aa45de` = #15);
+k=5/10 rescored from the stored rankings (`python -m bench.stats … --at-k K`). 95% intervals:
+Wilson for hit, bootstrap over questions for the rest. n = 1,982 scored (4 questions have no
+evidence and are unscored).
+
+| adapter | hit@5 | hit@10 | hit@15 | recall@5 | recall@15 | MRR | recall p50 | ingest ms/item | bytes/item |
+|---|---|---|---|---|---|---|---|---|---|
+| kannaka_minilm | 0.368 | 0.464 | **0.527** [0.505, 0.549] | 0.329 | **0.475** [0.453, 0.496] | 0.244 | 460 ms ¹ | 61 | 43 KB |
+| vector_numpy (MiniLM cosine) | 0.367 | 0.467 | **0.528** [0.506, 0.550] | 0.327 | **0.474** [0.453, 0.495] | 0.248 | 21 ms | 14 | 1.5 KB |
+| recency (last-k) | 0.003 | 0.011 | 0.020 | 0.002 | 0.017 | 0.003 | 0 | — | — |
+
+¹ kannaka answers a conversation's ~200 questions with one `recall --batch` process, so this is
+per-query time amortised in-process (LongMemEval rows pay a process spawn per question). debain2
+was at load 34–57 on 20 cores during the run; treat both latency columns as upper bounds.
+
+By category, hit@15 and recall@15 [95% CI], kannaka / cosine, and the paired recall difference:
+
+| category | n | hit@15 kannaka | hit@15 cosine | recall@15 kannaka | recall@15 cosine | paired Δ recall@15 |
+|---|---|---|---|---|---|---|
+| single-hop | 841 | 0.577 [0.543, 0.610] | 0.581 [0.548, 0.614] | 0.567 | 0.571 | −0.004 [−0.014, +0.007] |
+| multi-hop | 282 | 0.567 [0.509, 0.624] | 0.567 [0.509, 0.624] | 0.312 | 0.308 | +0.004 [−0.005, +0.013] |
+| temporal | 321 | 0.567 [0.512, 0.620] | 0.567 [0.512, 0.620] | 0.538 | 0.535 | +0.004 [−0.011, +0.019] |
+| open-domain | 92 | 0.413 [0.318, 0.515] | 0.413 [0.318, 0.515] | 0.297 | 0.297 | +0.000 [−0.033, +0.033] |
+| adversarial | 446 | 0.401 [0.357, 0.447] | 0.397 [0.353, 0.443] | 0.393 | 0.390 | +0.003 [−0.006, +0.013] |
+
+Reading it:
+- **A tie, now with the interval to say so.** Paired over 1,982 questions the medium minus
+  cosine is −0.001 [−0.008, +0.006] on hit@15 and +0.000 [−0.006, +0.006] on recall@15; the two
+  disagree on 44 questions of 1,982 and split them 21/23. No category separates. The one
+  interval that excludes zero is a **loss**: temporal MRR −0.016 [−0.027, −0.006] (the medium
+  ranks the same evidence slightly lower within the top-15).
+- **LoCoMo is hard for this encoder, for both systems.** Half the questions have no evidence
+  turn in the top 15. Reading the misses: with the `Speaker: text` item format, MiniLM ranks
+  short turns that mostly carry the speaker's name ("Caroline: Cool! What did it look like?")
+  above the evidence turn — the question names the speaker too. Multi-hop recall (0.31) is the
+  aggregation wall again: the questions need 2+ turns and the top-15 holds about a third of them.
+  Some gold labels are also off by a turn (the "painted a sunrise" evidence is `D1:12`; the
+  sentence is in `D1:14`), and 9 questions carry malformed evidence ids (`D8:6; D9:17`,
+  `D:11:26`), 5 of which can never score — under 0.5 %, the same for every adapter.
+- **The costs are the same shape as on LongMemEval**: the medium stores 28× the bytes, ingests
+  4.4× slower and answers ~20× slower than a numpy dot product that returns the same rankings.
+- Not comparable to published LoCoMo numbers that grade answers (Mem0's J score, etc.): this is
+  retrieval only; an answer pass waits for the Claude answer model (capped until 2026-10-01).
