@@ -2,6 +2,7 @@
 
   BENCH_LETTA_URL        http://127.0.0.1:8283    (docker letta/letta:0.16.8)
   BENCH_LETTA_LLM        ollama/qwen2.5:7b        (agent arm only; the model handle)
+  BENCH_LETTA_CTX        agent arm: context_window_limit (match the ollama server's context)
   BENCH_EMBED_URL        http://127.0.0.1:11437/v1 (the bench embed server, OpenAI shape)
   BENCH_LETTA_PG_DSN     optional: the server's Postgres, read-only, for footprint
   BENCH_LETTA_MAX_STEPS  agent arm: max agent steps per turn (default: the server's)
@@ -66,21 +67,20 @@ def embedding_config() -> dict:
 
 
 def llm_kwargs() -> dict:
-    """The agent's model. By default a handle the server resolves
-    (BENCH_LETTA_LLM, e.g. `ollama/qwen2.5:7b` via the server's OLLAMA_BASE_URL).
-    With BENCH_LETTA_LLM_ENDPOINT set, an explicit llm_config pointing at that
-    ollama endpoint instead — so the agent's LLM can live on another box (a
-    GPU, or a pod reached through a tunnel) without restarting the server —
-    with temperature 0 (deterministic, as for Mem0) and an explicit context
-    window (BENCH_LETTA_CTX, default 16384; the ollama server must be started
-    with at least that OLLAMA_CONTEXT_LENGTH or it truncates prompts)."""
-    ep = os.environ.get("BENCH_LETTA_LLM_ENDPOINT")
-    handle = os.environ.get("BENCH_LETTA_LLM", "ollama/qwen2.5:7b")
-    if not ep:
-        return {"model": handle}
-    return {"llm_config": {"model": handle.split("/", 1)[-1], "model_endpoint_type": "ollama",
-                           "model_endpoint": ep, "context_window": int(os.environ.get("BENCH_LETTA_CTX", "16384")),
-                           "temperature": 0.0, "handle": handle}}
+    """The agent's model: a handle the server resolves (BENCH_LETTA_LLM).
+    `ollama/<model>` uses the server's OLLAMA_BASE_URL; an LLM on another box
+    is registered once as a named provider (`POST /v1/providers/`
+    {"name": "podollama", "provider_type": "ollama", "base_url": ...}) and
+    addressed as `podollama/<model>`. (An explicit `llm_config` is rejected by
+    server 0.16.8 with a model_settings discriminator error.)
+    BENCH_LETTA_CTX sets `context_window_limit` so Letta's idea of the window
+    matches what the ollama server actually serves (OLLAMA_CONTEXT_LENGTH /
+    num_ctx) — otherwise Letta assumes the model's native 32k and ollama
+    silently truncates the prompt."""
+    kw = {"model": os.environ.get("BENCH_LETTA_LLM", "ollama/qwen2.5:7b")}
+    if os.environ.get("BENCH_LETTA_CTX"):
+        kw["context_window_limit"] = int(os.environ["BENCH_LETTA_CTX"])
+    return kw
 
 
 class LettaArchivalAdapter(Adapter):
