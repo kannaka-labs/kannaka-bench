@@ -481,6 +481,35 @@ def test_letta_adapters_attribute_by_tag_and_by_arrival():
     assert all(isinstance(v, (int, float)) for v in st.values())      # run.py sums these
 
 
+def test_graphiti_meter_counts_the_wire_and_facts_expand_to_source_turns():
+    import asyncio
+    from types import SimpleNamespace as NS
+    from bench.adapters.graphiti import GraphitiAdapter, _Meter
+
+    async def create(**kw):
+        return NS(usage=NS(prompt_tokens=1000, completion_tokens=50))
+    client = NS(chat=NS(completions=NS(create=create)))
+    m = _Meter()
+    m.wrap(client)
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(client.chat.completions.create(model="x"))
+    loop.run_until_complete(client.chat.completions.create(model="x"))
+    assert (m.calls, m.prompt, m.completion) == (2, 2000, 100)
+
+    ad = GraphitiAdapter()
+    ad.loop = loop
+    ad.ep_item = {"e1": "s1#0", "e2": "s2#0", "e3": "s3#0"}
+
+    async def search(q, num_results):
+        return [NS(uuid="f1", fact="Caroline owns a kayak", episodes=["e3", "e1"]),   # merged from two turns
+                NS(uuid="f2", fact="GPS broke", episodes=["e1"]),
+                NS(uuid="f3", fact="orphan fact", episodes=["e9"])]
+    ad.g = NS(search=search)
+    assert [h.id for h in ad.recall("kayak", 2)] == ["s3#0", "s1#0"]   # a fact credits its source turns, cut at k
+    assert [h.id for h in ad.recall("kayak", 5)] == ["s3#0", "s1#0", "graphiti:e9"]   # unknown episode kept, not dropped
+    loop.close()
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
