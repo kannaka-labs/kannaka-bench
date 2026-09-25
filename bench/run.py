@@ -32,6 +32,8 @@ ADAPTERS = {
     "supermemory": "bench.adapters.supermemory:SupermemoryAdapter",
     "supermemory_mem": "bench.adapters.supermemory:SupermemoryMemAdapter",
     "mem0": "bench.adapters.mem0:Mem0Adapter",
+    "pgvector": "bench.adapters.pgvector:PgvectorAdapter",
+    "pgvector_exact": "bench.adapters.pgvector:PgvectorExactAdapter",
 }
 
 
@@ -275,6 +277,10 @@ def main(argv=None):
                     manifest["adapter_versions"][n] = ad.version
                 if getattr(ad, "bin_info", None):
                     manifest.setdefault("adapter_bins", {})[n] = ad.bin_info
+                # The configuration a competitor row ran with (index, versions,
+                # extraction model) — part of what is under test.
+                if hasattr(ad, "describe"):
+                    manifest.setdefault("adapter_config", {})[n] = ad.describe()
                 # Whether the attention beam actually fired, and how sparse it
                 # was. Without this a "beam" arm and a dense arm are
                 # indistinguishable in the record.

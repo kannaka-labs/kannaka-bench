@@ -1,0 +1,65 @@
+{
+ "run_id": "s-5pertype-k15-pgvector",
+ "started_at": "2026-09-25T19:41:40.352417+00:00",
+ "commit": "f83c3e4a863c148520d335c5540340d406a0341b",
+ "dataset": {
+  "dataset": "longmemeval_s",
+  "path": "/home/nick/.kannaka-bench/data/longmemeval_s.json",
+  "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+  "questions_total": 500,
+  "limit_is_per_type": true
+ },
+ "adapters": [
+  "vector_numpy",
+  "pgvector_exact",
+  "pgvector"
+ ],
+ "k": 15,
+ "session_cap": 0,
+ "limit": 5,
+ "max_items": 0,
+ "consolidate": false,
+ "host": "nick-debain2",
+ "platform": "Linux-6.12.107+deb13-amd64-x86_64-with-glibc2.41",
+ "python": "3.13.5",
+ "cpu_count": 20,
+ "stores": 30,
+ "adapter_versions": {},
+ "kannaka_flags": {
+  "vector_numpy": {},
+  "pgvector_exact": {},
+  "pgvector": {}
+ },
+ "adapter_config": {
+  "pgvector_exact": {
+   "index": "none",
+   "ef_search": null,
+   "encoder": "sentence-transformers/all-MiniLM-L6-v2",
+   "server_version": "16.15 (Debian 16.15-1.pgdg12+2)",
+   "pgvector_version": "0.8.6",
+   "write_shape": "one INSERT per turn into a live index"
+  },
+  "pgvector": {
+   "index": "hnsw",
+   "ef_search": 40,
+   "encoder": "sentence-transformers/all-MiniLM-L6-v2",
+   "server_version": "16.15 (Debian 16.15-1.pgdg12+2)",
+   "pgvector_version": "0.8.6",
+   "write_shape": "one INSERT per turn into a live index"
+  }
+ },
+ "ingest_stats": {
+  "pgvector_exact": {
+   "llm_calls": 0,
+   "dropped_turns": 0,
+   "ingest_errors": 0
+  },
+  "pgvector": {
+   "llm_calls": 0,
+   "dropped_turns": 0,
+   "ingest_errors": 0
+  }
+ },
+ "finished_at": "2026-09-25T20:27:55.692176+00:00",
+ "wall_s": 2775.3
+}
