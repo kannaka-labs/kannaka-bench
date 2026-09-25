@@ -36,6 +36,7 @@ ADAPTERS = {
     "pgvector_exact": "bench.adapters.pgvector:PgvectorExactAdapter",
     "letta_archival": "bench.adapters.letta:LettaArchivalAdapter",
     "letta_agent": "bench.adapters.letta:LettaAgentAdapter",
+    "graphiti": "bench.adapters.graphiti:GraphitiAdapter",
 }
 
 
