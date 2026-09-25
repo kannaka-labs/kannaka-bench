@@ -397,7 +397,8 @@ By type, longmemeval_s, kannaka / cosine (coverage): multi-session **0.59 / 0.49
 single-session-assistant 1.00 / 1.00.
 
 Reading it:
-- **At the turn level the medium is ahead of exact cosine on the same embeddings**: +0.04 coverage
+- *(Retracted 2026-09-25: at n=500 this edge is +0.008 [−0.002, +0.019], multi-session +0.002 — see the n=500 entry.)*
+  **At the turn level the medium is ahead of exact cosine on the same embeddings**: +0.04 coverage
   overall, +0.10 on multi-session and +0.13 on preference, with all-evidence 0.767 vs 0.700. This
   is the first table where the medium's ranking, not just its session hit, beats the dot product —
   and it is exactly the multi-evidence questions. Final accuracy still ties (0.733 both) because the
@@ -1272,3 +1273,65 @@ Only 3 of the 30 questions retrieved different evidence at all. So the honest re
 not buy better answers": **the extra evidence converted exactly once, a same-evidence answer miss cancelled it, and
 n=30 cannot separate the two.** The gain lives in the multi-evidence slice, so the scaled runs should report that
 slice with its own interval. Title correction credited to Baudot, the swap to unspent, the method to calder.
+
+## 2026-09-25 — `longmemeval_s` at n=500 (every question), k=15: which n=30 claims survive
+
+Every `longmemeval_s` table above is n=30 (five per type), where one question moves a type by
+0.20. This is the same standard setting on **all 500 questions**: k=15, facets off, MiniLM
+through `bench/embed_server.py` for kannaka and in-process for cosine (same weights), binary
+`kannaka 0.16.10` sha256 `2ddc7aec…` — the build behind the published standard row. Run
+`results/s-all-k15/` (merged from 3 shards, `bench.merge`); intervals from `python -m bench.stats`
+(Wilson for hit, 10,000-sample bootstrap over questions for the rest; paired = bootstrap of the
+per-question difference).
+
+Host: a qBraid lab2 CPU pod (7.4 vCPU cgroup, 25 GB, Ubuntu 24.04), free plan hours, 0 credits.
+The pod was stopped from outside the bench at ~21:41Z with 332 questions done; the shards
+resumed on a fresh pod with `--resume` (168 more). From 20:15Z another agent's `llama-server`
+shared the first pod — p95 and ingest columns are noisy; recall p50 is not (kannaka 709 ms before
+the stop, 712 ms after). `vector_numpy` embedded in-process on one thread here, so its ingest
+column is not comparable to earlier rows.
+
+**Calibration first: the 30 standard questions reproduce the published rows exactly** — all 30
+top-15 lists identical for kannaka_minilm, vector_numpy and recency, on a different host.
+
+| adapter | n | hit@15 | recall@15 | evid@15 | all-evidence@15 | MRR | recall p50 | bytes/item |
+|---|---|---|---|---|---|---|---|---|
+| kannaka_minilm | 500 | 0.982 [0.966, 0.991] | 0.938 [0.921, 0.953] | 0.821 [0.792, 0.850] | 0.720 | 0.885 [0.861, 0.909] | 711 ms | 45.7 KB |
+| vector_numpy (MiniLM cosine) | 500 | 0.978 [0.961, 0.988] | 0.936 [0.919, 0.952] | 0.813 [0.783, 0.842] | 0.712 | 0.889 [0.864, 0.912] | 15 ms | 1.6 KB |
+| recency (last-k) | 500 | 0.096 [0.073, 0.125] | 0.057 | 0.032 | — | 0.043 | 0 | — |
+
+Paired, kannaka − cosine over 500 questions (kannaka better / worse / tie): hit@15 +0.004
+[+0.000, +0.010] (2/0/498); recall@15 +0.002 [−0.002, +0.005] (3/1/496); evid@15 +0.008
+[−0.002, +0.019] (15/9/455); MRR −0.003 [−0.008, +0.000] (13/12/475).
+
+By type — hit@15 and evid@15 [95% CI], kannaka / cosine, and the paired evid difference:
+
+| type | n | hit@15 kannaka | hit@15 cosine | evid@15 kannaka | evid@15 cosine | paired Δ evid (k better/worse) |
+|---|---|---|---|---|---|---|
+| multi-session | 133 | 0.992 [0.959, 0.999] | 0.992 [0.959, 0.999] | 0.734 [0.678, 0.787] | 0.733 [0.677, 0.786] | +0.002 [−0.021, +0.025] (8/6) |
+| temporal-reasoning | 133 | 0.977 [0.936, 0.992] | 0.962 [0.915, 0.984] | 0.716 [0.651, 0.781] | 0.709 [0.642, 0.774] | +0.008 [−0.008, +0.023] (3/1) |
+| knowledge-update | 78 | 0.987 [0.931, 0.998] | 0.987 [0.931, 0.998] | 0.924 [0.868, 0.965] | 0.924 [0.868, 0.965] | +0.000 [−0.021, +0.021] (1/1) |
+| single-session-user | 70 | 0.957 [0.881, 0.985] | 0.957 [0.881, 0.985] | 0.961 [0.914, 1.000] | 0.945 [0.883, 0.992] | +0.016 [+0.000, +0.047] (1/0) |
+| single-session-assistant | 56 | 1.000 [0.936, 1.000] | 1.000 [0.936, 1.000] | 1.000 | 1.000 | 0 (0/0) |
+| single-session-preference | 30 | 0.967 [0.833, 0.994] | 0.967 [0.833, 0.994] | 0.767 [0.611, 0.900] | 0.711 [0.544, 0.856] | +0.056 [−0.022, +0.167] (2/1) |
+
+**The n=30 claims, checked:**
+
+| claim made at n=30 | n=30 | n=500 | verdict |
+|---|---|---|---|
+| retrieval parity: kannaka ≈ cosine on hit / recall / MRR | 1.000 / 0.950 / 0.918 vs 1.000 / 0.950 / 0.921 | 0.982 / 0.938 / 0.885 vs 0.978 / 0.936 / 0.889 | **holds** — no paired interval separates them |
+| "every question has a gold session in the top 15" | hit@15 1.000 both | 0.982 / 0.978 (9 and 11 misses) | **does not hold** — the level was a small-sample ceiling |
+| the medium is ahead of cosine on turn-level evidence (+0.04) | 0.848 vs 0.809 | 0.821 vs 0.813, paired +0.008 [−0.002, +0.019] | **does not survive** — its n=30 interval was already +0.039 [−0.022, +0.122] (2 wins, 1 loss) |
+| … by +0.10 on multi-session | 0.59 vs 0.49 | 0.734 vs 0.733, +0.002 [−0.021, +0.025] | **does not survive** |
+| … by +0.13 on preference | 0.80 vs 0.67 | 0.767 vs 0.711, +0.056 [−0.022, +0.167] | **unresolved** — the dataset has only 30 preference questions; n cannot grow here |
+| multi-session is where retrieval is weakest (aggregation) | recall@15 0.80 | recall@15 0.908 / 0.912; evid 0.73 | **partly** — session recall is far better than n=30 said; on evidence, multi-session (0.73) and temporal (0.72) are the two weak types for both |
+| the medium's cost: slower recall, more bytes | 1.0 s vs 14 ms; 46 KB vs 1.6 KB | 711 ms vs 15 ms; 45.7 KB vs 1.6 KB | **holds** (47× latency, 29× bytes) |
+| recency is a floor | 0.167 | 0.096 | holds |
+
+Reading it: **on `longmemeval_s` the medium is exact cosine** — 498 of 500 questions get the same
+hit@15, 496 the same recall@15 and 455 of 479 the same evidence coverage; where they differ, the split is
+15/9 on evidence and 13/12 on MRR. The turn-level edge published on 2026-09-18 ("the first table
+where the medium's ranking beats the dot product") was three questions; retract it. What survives
+unchanged is the cost column. The distinguishing claims the paper still needs are the ones no
+retrieval table here can make (consolidation, supersession, long-lived stores), and the
+2026-09-19 consolidation arm was negative.
