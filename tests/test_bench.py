@@ -441,7 +441,9 @@ class _FakeLetta:
             if "kayak" in text or "gps" in text.lower():          # the agent chooses what to keep
                 me.n += 1
                 me.store[f"p{me.n}"] = ("User mentioned: " + text, [])
-            return NS(usage=NS(step_count=2, prompt_tokens=900, completion_tokens=40))
+            calls = [NS(message_type="tool_call_message", tool_call=NS(name="archival_memory_insert"))]                 if ("kayak" in text or "gps" in text.lower()) else []
+            return NS(usage=NS(step_count=2, prompt_tokens=900, completion_tokens=40),
+                      messages=calls + [NS(message_type="assistant_message", content="ok")])
 
         self.agents = NS(create=create_agent, delete=lambda i: me.deleted.append(i),
                          passages=NS(create=p_create, list=p_list, search=p_search),
@@ -470,6 +472,7 @@ def test_letta_adapters_attribute_by_tag_and_by_arrival():
     st = ag.ingest_stats()
     assert st["llm_calls"] == 6 and st["prompt_tokens"] == 2700, st      # 2 steps x 3 turns, from usage
     assert st["dropped_turns"] == 1 and st["passages"] == 2, st         # the weather turn was not archived
+    assert (st["archival_inserts"], st["replies"], st["core_memory_edits"]) == (2, 3, 0), st
     hits = [h.id for h in ag.recall("car gps failing", 3)]
     assert hits[0] == "s3#0" and "s2#0" not in hits, hits            # rewritten passage -> its source turn
     assert all(isinstance(v, (int, float)) for v in st.values())      # run.py sums these

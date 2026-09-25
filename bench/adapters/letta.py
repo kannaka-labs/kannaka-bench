@@ -103,6 +103,13 @@ class LettaArchivalAdapter(Adapter):
         self.ingest_errors = 0
         self.passages = 0
         self.turns = 0
+        # What the agent spent its steps on (agent arm): archival inserts are
+        # the only writes this bench can recall; core-memory edits live in the
+        # prompt, not in a searchable store; replies are neither.
+        self.archival_inserts = 0
+        self.core_memory_edits = 0
+        self.replies = 0
+        self.other_tool_calls = 0
 
     def _c(self):
         if self._client is None:
@@ -163,6 +170,25 @@ class LettaArchivalAdapter(Adapter):
             if self.ingest_errors <= 3:
                 print(f"[letta] insert failed for {it.id}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
 
+    def _count_tools(self, messages) -> None:
+        for m in messages:
+            calls = getattr(m, "tool_calls", None) or []
+            one = getattr(m, "tool_call", None)
+            if one is not None:
+                calls = [one, *calls]
+            if getattr(m, "message_type", "") == "assistant_message" and not calls:
+                self.replies += 1
+            for tc in calls:
+                name = (getattr(tc, "name", None) or "")
+                if name == "archival_memory_insert":
+                    self.archival_inserts += 1
+                elif name.startswith("core_memory") or name.startswith("memory_") or name in ("memory", "rethink_memory"):
+                    self.core_memory_edits += 1
+                elif name == "send_message":
+                    self.replies += 1
+                else:
+                    self.other_tool_calls += 1
+
     def _passage_ids(self) -> set[str]:
         out, after = set(), None
         while True:
@@ -182,6 +208,7 @@ class LettaArchivalAdapter(Adapter):
             kw["max_steps"] = int(os.environ["BENCH_LETTA_MAX_STEPS"])
         try:
             r = self._c().agents.messages.create(self.agent_id, **kw)
+            self._count_tools(getattr(r, "messages", None) or [])
             u = getattr(r, "usage", None)
             if u is not None:
                 self.llm_calls += int(getattr(u, "step_count", 0) or 0)
@@ -250,7 +277,9 @@ class LettaArchivalAdapter(Adapter):
         """Numeric only (run.py sums these across stores)."""
         return {"llm_calls": self.llm_calls, "prompt_tokens": self.prompt_tokens,
                 "completion_tokens": self.completion_tokens, "dropped_turns": self.dropped_turns,
-                "ingest_errors": self.ingest_errors, "passages": self.passages, "turns": self.turns}
+                "ingest_errors": self.ingest_errors, "passages": self.passages, "turns": self.turns,
+                "archival_inserts": self.archival_inserts, "core_memory_edits": self.core_memory_edits,
+                "replies": self.replies, "other_tool_calls": self.other_tool_calls}
 
     def describe(self) -> dict:
         return {"server": "letta V1 API server (retired; last release 0.16.8)",
