@@ -39,7 +39,8 @@ One interface (`bench/adapters/base.py`): `ingest(items)`, `recall(query, k)`,
 | `kannaka_minilm` | the same binary with `all-MiniLM-L6-v2` as its encoder (via ollama) — same encoder family as the vector baseline, so the comparison is about the medium | in |
 | `vector_numpy` | sentence-transformers `all-MiniLM-L6-v2` + cosine over numpy — the honest vector baseline | in |
 | `recency` | no retrieval: the k most recent items (the "plain context" floor for recall@k; full context in phase 2) | in |
-| `pgvector` | the same embeddings in Postgres/pgvector | next |
+| `pgvector` | the same MiniLM embeddings in Postgres 16 + pgvector 0.8, HNSW index (defaults), one INSERT per turn; `BENCH_PG_DSN` | in |
+| `pgvector_exact` | the same table with no index (sequential scan) — the control that must reproduce `vector_numpy` | in |
 | `mem0`, `zep_graphiti`, `letta` | their open-source local paths | next |
 
 ## Running

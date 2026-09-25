@@ -1206,3 +1206,44 @@ Reading it:
   4.4× slower and answers ~20× slower than a numpy dot product that returns the same rankings.
 - Not comparable to published LoCoMo numbers that grade answers (Mem0's J score, etc.): this is
   retrieval only; an answer pass waits for the Claude answer model (capped until 2026-10-01).
+
+## 2026-09-25 — pgvector: the same embeddings in Postgres (`longmemeval_s`, same 30 questions, k=15)
+
+Adapter `bench/adapters/pgvector.py`, Postgres 16.15 + pgvector 0.8.6 (docker `pgvector/pgvector:pg16`,
+debain2). Encoder held fixed: the same in-process all-MiniLM-L6-v2 weights `vector_numpy` loads, so
+the row measures the database and its index. Two arms: **`pgvector`** = HNSW (`vector_cosine_ops`,
+pgvector defaults m=16, ef_construction=64, ef_search=40), index created before the inserts, one
+INSERT per turn — the shape an agent writing memories one at a time has; **`pgvector_exact`** = no
+index (sequential scan), the control that must reproduce `vector_numpy`. Same 30 question ids as
+every standard row (`--question-ids`), k=15, no cap. Run `s-5pertype-k15-pgvector` (commit
+`f83c3e4`), raw rows in `results/s-5pertype-k15-pgvector/`.
+
+| adapter (k=15) | hit@15 | recall@15 | evid@15 | all-evid@15 | MRR | recall p50 (row) | DB/matmul query only | ingest ms/item | bytes/item |
+|---|---|---|---|---|---|---|---|---|---|
+| vector_numpy (numpy, exact) | 1.000 | 0.950 | 0.809 | 0.700 | 0.921 | 1 126 ms | **0.06 ms** | **54.9** | **1 556** |
+| pgvector_exact (seq scan) | 1.000 | 0.950 | 0.809 | 0.700 | 0.921 | 1 252 ms | 1.2–4.1 ms | 60.3 | 2 678 |
+| pgvector (HNSW) | 1.000 | 0.950 | 0.809 | 0.700 | 0.921 | 1 256 ms | 0.65–1.35 ms | 63.4 | 4 738 |
+| kannaka_minilm (standard row, 09-22) | 1.000 | 0.950 | 0.848 | 0.767 | 0.918 | 1 024 ms | — | 98 | 46 KB |
+
+Reading it:
+- **The control holds exactly**: `pgvector_exact` returns the identical top-15 list as `vector_numpy`
+  on 30/30 questions — encoding, vector literals, the `<=>` operator and id attribution are right.
+- **HNSW costs nothing on this scale**: identical lists on 29/30; on the 30th (`71017276`,
+  temporal-reasoning, 614 turns) one non-evidence turn at the tail of the top-15 is swapped
+  (evid@15 1.0 both ways). Every aggregate equals the exact rows. At ~500 turns per store an ANN index
+  has nothing to approximate; this row does not say what HNSW does at 10⁵–10⁶ memories (LongMemEval-M
+  or beyond), where recall-vs-ef_search is the real question.
+- **Latency: the row column is the encoder, not the database.** debain2 ran at load 50–58 on 20 cores
+  during this run (other tenants + this run), and in-process MiniLM query encoding alone measured
+  **1 179 ms p50** in the same conditions — so every "recall p50" above is ~1.1 s of encoding plus
+  the search. The search itself, timed separately on three real stores with pre-encoded queries
+  (`SELECT … ORDER BY emb <=> q LIMIT 15`, 40 queries × 5): HNSW 0.65–1.35 ms, sequential scan
+  1.2–4.1 ms, numpy matmul 0.06 ms. The p50s in this table are not comparable to the 14 ms
+  `vector_numpy` p50 published on 09-17 (quiet box); compare within the row only.
+- **Losses for pgvector, same table:** 1.7× (exact) / 3.0× (HNSW) the bytes of a numpy matrix per
+  turn (heap + TOAST + index), and a client/server round trip per query (~1 ms). Against it, it is
+  a real database: concurrent writers, durability, filters, SQL.
+- **Versus kannaka_minilm on identical embeddings:** the same hit/recall/MRR as every cosine row;
+  kannaka's medium keeps its turn-level evidence edge (evid@15 0.848 vs 0.809, all-evidence 0.767 vs
+  0.700 — the multi-evidence questions), at ~20× the bytes and a slower ingest. pgvector is the
+  honest "what most teams ship" baseline, and on this set it *is* cosine.
