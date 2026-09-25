@@ -111,7 +111,12 @@ class Mem0Adapter(Adapter):
                 "provider": "openai",
                 "config": {"model": model, "openai_base_url": llm_url,
                            "api_key": llm_key, "temperature": 0.0,
-                           "max_tokens": 1024},
+                           # mem0's OWN default (BaseLlmConfig max_tokens=2000).
+                           # 1024 truncated the extraction JSON of long turns
+                           # (parse errors at 3.3-4.3k chars, ~0.5% of turns)
+                           # and mem0 then stores nothing for them: a loss
+                           # caused by our config, not by Mem0.
+                           "max_tokens": int(os.environ.get("BENCH_MEM0_MAX_TOKENS", "2000"))},
             },
             "embedder": {
                 "provider": "openai",
