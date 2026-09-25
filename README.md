@@ -41,7 +41,8 @@ One interface (`bench/adapters/base.py`): `ingest(items)`, `recall(query, k)`,
 | `recency` | no retrieval: the k most recent items (the "plain context" floor for recall@k; full context in phase 2) | in |
 | `pgvector` | the same MiniLM embeddings in Postgres 16 + pgvector 0.8, HNSW index (defaults), one INSERT per turn; `BENCH_PG_DSN` | in |
 | `pgvector_exact` | the same table with no index (sequential scan) — the control that must reproduce `vector_numpy` | in |
-| `mem0`, `zep_graphiti` | their open-source local paths | next |
+| `mem0` | its open-source local path | next |
+| `graphiti` | Zep's open-source engine (graphiti-core, embedded Kuzu): every turn an episode, LLM entity/fact extraction per turn, hybrid BM25+cosine search over facts mapped back to source turns; same MiniLM; priced with `bench.price` before any scored run | priced |
 | `letta_archival` | Letta's V1 API server (0.16.8 — the last self-hostable Letta memory server; current Letta is Letta Code): every turn inserted into archival memory, recalled with archival search; same MiniLM via the embed server; no LLM | in |
 | `letta_agent` | the same server, MemGPT's real design: every turn sent to a `memgpt_v2_agent` (archival tools attached — 0.16.8 defaults have none), its LLM decides what to archive; priced with `bench.price` before any scored run | priced |
 
