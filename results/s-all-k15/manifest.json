@@ -1,0 +1,227 @@
+{
+ "run_id": "s-all-k15",
+ "started_at": "2026-09-25T21:46:10.393836+00:00",
+ "commit": "a38689495978a587fea0365ffde0da889a4b90c6",
+ "dataset": {
+  "dataset": "longmemeval_s",
+  "path": "/home/jovyan/.kannaka-bench/data/longmemeval_s.json",
+  "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+  "questions_total": 500,
+  "limit_is_per_type": false,
+  "streamed": false
+ },
+ "adapters": [
+  "kannaka_minilm",
+  "vector_numpy",
+  "recency"
+ ],
+ "k": 15,
+ "session_cap": 0,
+ "limit": null,
+ "max_items": 0,
+ "consolidate": false,
+ "host": "jupyter-nflach78-40gmail-2ecom-2d6988bd1c6b5c6c7c2eafda4c",
+ "platform": "Linux-6.8.0-1067-azure-x86_64-with-glibc2.39",
+ "python": "3.12.3",
+ "cpu_count": 16,
+ "stores": 500,
+ "shard": null,
+ "stores_total": 500,
+ "adapter_versions": {
+  "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+ },
+ "kannaka_flags": {
+  "kannaka_minilm": {},
+  "vector_numpy": {},
+  "recency": {}
+ },
+ "adapter_bins": {
+  "kannaka_minilm": {
+   "path": "/home/jovyan/bin/kannaka",
+   "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+  }
+ },
+ "beam": {
+  "kannaka_minilm": {
+   "recalls": 0,
+   "scored": 0,
+   "total": 0,
+   "mean_coverage": null,
+   "enabled_env": ""
+  }
+ },
+ "finished_at": "2026-09-25T22:31:58.802180+00:00",
+ "wall_s": 2748.4,
+ "merged_from": [
+  "s-all-k15-shard0",
+  "s-all-k15-shard1",
+  "s-all-k15-shard2"
+ ],
+ "shards": [
+  {
+   "run_id": "s-all-k15-shard0",
+   "started_at": "2026-09-25T21:46:10.439107+00:00",
+   "commit": "a38689495978a587fea0365ffde0da889a4b90c6",
+   "dataset": {
+    "dataset": "longmemeval_s",
+    "path": "/home/jovyan/.kannaka-bench/data/longmemeval_s.json",
+    "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+    "questions_total": 500,
+    "limit_is_per_type": false,
+    "streamed": false
+   },
+   "adapters": [
+    "kannaka_minilm",
+    "vector_numpy",
+    "recency"
+   ],
+   "k": 15,
+   "session_cap": 0,
+   "limit": null,
+   "max_items": 0,
+   "consolidate": false,
+   "host": "jupyter-nflach78-40gmail-2ecom-2d6988bd1c6b5c6c7c2eafda4c",
+   "platform": "Linux-6.8.0-1067-azure-x86_64-with-glibc2.39",
+   "python": "3.12.3",
+   "cpu_count": 16,
+   "stores": 167,
+   "shard": "0/3",
+   "stores_total": 500,
+   "adapter_versions": {
+    "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+   },
+   "kannaka_flags": {
+    "kannaka_minilm": {},
+    "vector_numpy": {},
+    "recency": {}
+   },
+   "adapter_bins": {
+    "kannaka_minilm": {
+     "path": "/home/jovyan/bin/kannaka",
+     "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+    }
+   },
+   "beam": {
+    "kannaka_minilm": {
+     "recalls": 0,
+     "scored": 0,
+     "total": 0,
+     "mean_coverage": null,
+     "enabled_env": ""
+    }
+   },
+   "finished_at": "2026-09-25T22:31:58.802180+00:00",
+   "wall_s": 2748.4
+  },
+  {
+   "run_id": "s-all-k15-shard1",
+   "started_at": "2026-09-25T21:46:10.460131+00:00",
+   "commit": "a38689495978a587fea0365ffde0da889a4b90c6",
+   "dataset": {
+    "dataset": "longmemeval_s",
+    "path": "/home/jovyan/.kannaka-bench/data/longmemeval_s.json",
+    "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+    "questions_total": 500,
+    "limit_is_per_type": false,
+    "streamed": false
+   },
+   "adapters": [
+    "kannaka_minilm",
+    "vector_numpy",
+    "recency"
+   ],
+   "k": 15,
+   "session_cap": 0,
+   "limit": null,
+   "max_items": 0,
+   "consolidate": false,
+   "host": "jupyter-nflach78-40gmail-2ecom-2d6988bd1c6b5c6c7c2eafda4c",
+   "platform": "Linux-6.8.0-1067-azure-x86_64-with-glibc2.39",
+   "python": "3.12.3",
+   "cpu_count": 16,
+   "stores": 167,
+   "shard": "1/3",
+   "stores_total": 500,
+   "adapter_versions": {
+    "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+   },
+   "kannaka_flags": {
+    "kannaka_minilm": {},
+    "vector_numpy": {},
+    "recency": {}
+   },
+   "adapter_bins": {
+    "kannaka_minilm": {
+     "path": "/home/jovyan/bin/kannaka",
+     "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+    }
+   },
+   "beam": {
+    "kannaka_minilm": {
+     "recalls": 0,
+     "scored": 0,
+     "total": 0,
+     "mean_coverage": null,
+     "enabled_env": ""
+    }
+   },
+   "finished_at": "2026-09-25T22:31:48.449780+00:00",
+   "wall_s": 2738.0
+  },
+  {
+   "run_id": "s-all-k15-shard2",
+   "started_at": "2026-09-25T21:46:10.393836+00:00",
+   "commit": "a38689495978a587fea0365ffde0da889a4b90c6",
+   "dataset": {
+    "dataset": "longmemeval_s",
+    "path": "/home/jovyan/.kannaka-bench/data/longmemeval_s.json",
+    "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+    "questions_total": 500,
+    "limit_is_per_type": false,
+    "streamed": false
+   },
+   "adapters": [
+    "kannaka_minilm",
+    "vector_numpy",
+    "recency"
+   ],
+   "k": 15,
+   "session_cap": 0,
+   "limit": null,
+   "max_items": 0,
+   "consolidate": false,
+   "host": "jupyter-nflach78-40gmail-2ecom-2d6988bd1c6b5c6c7c2eafda4c",
+   "platform": "Linux-6.8.0-1067-azure-x86_64-with-glibc2.39",
+   "python": "3.12.3",
+   "cpu_count": 16,
+   "stores": 166,
+   "shard": "2/3",
+   "stores_total": 500,
+   "adapter_versions": {
+    "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+   },
+   "kannaka_flags": {
+    "kannaka_minilm": {},
+    "vector_numpy": {},
+    "recency": {}
+   },
+   "adapter_bins": {
+    "kannaka_minilm": {
+     "path": "/home/jovyan/bin/kannaka",
+     "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+    }
+   },
+   "beam": {
+    "kannaka_minilm": {
+     "recalls": 0,
+     "scored": 0,
+     "total": 0,
+     "mean_coverage": null,
+     "enabled_env": ""
+    }
+   },
+   "finished_at": "2026-09-25T22:31:27.434624+00:00",
+   "wall_s": 2717.0
+  }
+ ]
+}
