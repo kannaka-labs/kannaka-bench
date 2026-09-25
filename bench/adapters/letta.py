@@ -65,6 +65,24 @@ def embedding_config() -> dict:
     }
 
 
+def llm_kwargs() -> dict:
+    """The agent's model. By default a handle the server resolves
+    (BENCH_LETTA_LLM, e.g. `ollama/qwen2.5:7b` via the server's OLLAMA_BASE_URL).
+    With BENCH_LETTA_LLM_ENDPOINT set, an explicit llm_config pointing at that
+    ollama endpoint instead — so the agent's LLM can live on another box (a
+    GPU, or a pod reached through a tunnel) without restarting the server —
+    with temperature 0 (deterministic, as for Mem0) and an explicit context
+    window (BENCH_LETTA_CTX, default 16384; the ollama server must be started
+    with at least that OLLAMA_CONTEXT_LENGTH or it truncates prompts)."""
+    ep = os.environ.get("BENCH_LETTA_LLM_ENDPOINT")
+    handle = os.environ.get("BENCH_LETTA_LLM", "ollama/qwen2.5:7b")
+    if not ep:
+        return {"model": handle}
+    return {"llm_config": {"model": handle.split("/", 1)[-1], "model_endpoint_type": "ollama",
+                           "model_endpoint": ep, "context_window": int(os.environ.get("BENCH_LETTA_CTX", "16384")),
+                           "temperature": 0.0, "handle": handle}}
+
+
 class LettaArchivalAdapter(Adapter):
     name = "letta_archival"
     agent_driven = False
@@ -105,7 +123,7 @@ class LettaArchivalAdapter(Adapter):
         tag = hashlib.sha1(run_dir.encode("utf-8")).hexdigest()[:12]
         a = c.agents.create(
             name=f"bench-{self.name}-{tag}",
-            model=os.environ.get("BENCH_LETTA_LLM", "ollama/qwen2.5:7b"),
+            **llm_kwargs(),
             embedding_config=embedding_config(),
             memory_blocks=[{"label": "human", "value": ""},
                            {"label": "persona", "value": "I am a helpful assistant with long-term memory."}],
@@ -237,7 +255,7 @@ class LettaArchivalAdapter(Adapter):
     def describe(self) -> dict:
         return {"server": "letta V1 API server (retired; last release 0.16.8)",
                 "server_version": self.server_version, "arm": self.name,
-                "llm": os.environ.get("BENCH_LETTA_LLM", "ollama/qwen2.5:7b") if self.agent_driven else None,
+                "llm": llm_kwargs() if self.agent_driven else None,
                 "embedding": embedding_config()}
 
     def close(self) -> None:
