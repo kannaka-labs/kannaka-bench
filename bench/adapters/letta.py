@@ -92,6 +92,7 @@ class LettaArchivalAdapter(Adapter):
         self.agent_id = None
         self.passage_item: dict[str, str] = {}   # passage id -> item id (agent arm)
         self.known: set[str] = set()
+        self.tools: list[str] = []
         self.server_version = None
         self._reset_counters()
 
@@ -128,14 +129,31 @@ class LettaArchivalAdapter(Adapter):
             except Exception:  # noqa: BLE001
                 self.server_version = "unknown"
         tag = hashlib.sha1(run_dir.encode("utf-8")).hexdigest()[:12]
+        extra = {}
+        if self.agent_driven:
+            # ⚠ On server 0.16.8 a new agent's default type (letta_v1_agent) has
+            # NO tools at all, and even memgpt_v2_agent's base set is only
+            # conversation_search / memory_insert / memory_replace /
+            # send_message — no archival tools. Without attaching them the
+            # agent can never write a recallable memory and every turn reads
+            # as "dropped" (our first pricing run measured exactly that — a
+            # chatbot, not MemGPT). MemGPT's design is core memory + archival
+            # memory the agent pages into, so both archival tools are attached.
+            extra = {"agent_type": os.environ.get("BENCH_LETTA_AGENT_TYPE", "memgpt_v2_agent"),
+                     "tools": ["archival_memory_insert", "archival_memory_search"]}
         a = c.agents.create(
             name=f"bench-{self.name}-{tag}",
             **llm_kwargs(),
+            **extra,
             embedding_config=embedding_config(),
             memory_blocks=[{"label": "human", "value": ""},
                            {"label": "persona", "value": "I am a helpful assistant with long-term memory."}],
         )
         self.agent_id = a.id
+        self.tools = sorted(t.name for t in (getattr(a, "tools", None) or []))
+        if self.agent_driven and "archival_memory_insert" not in self.tools:
+            raise RuntimeError(f"letta agent has no archival_memory_insert tool (tools={self.tools}); "
+                               "it could never write a recallable memory")
 
     # -- ingest ---------------------------------------------------------
     def _when(self, it: MemoryItem):
@@ -285,6 +303,8 @@ class LettaArchivalAdapter(Adapter):
         return {"server": "letta V1 API server (retired; last release 0.16.8)",
                 "server_version": self.server_version, "arm": self.name,
                 "llm": llm_kwargs() if self.agent_driven else None,
+                "agent_type": os.environ.get("BENCH_LETTA_AGENT_TYPE", "memgpt_v2_agent") if self.agent_driven else "default",
+                "tools": self.tools,
                 "embedding": embedding_config()}
 
     def close(self) -> None:

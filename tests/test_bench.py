@@ -421,7 +421,8 @@ class _FakeLetta:
 
         def create_agent(**kw):
             me.store = {}
-            return NS(id="agent-1")
+            me.created = kw
+            return NS(id="agent-1", tools=[NS(name=t) for t in kw.get("tools", [])])
 
         def p_create(agent_id, text, tags=None, created_at=None):
             me.n += 1
@@ -473,6 +474,8 @@ def test_letta_adapters_attribute_by_tag_and_by_arrival():
     assert st["llm_calls"] == 6 and st["prompt_tokens"] == 2700, st      # 2 steps x 3 turns, from usage
     assert st["dropped_turns"] == 1 and st["passages"] == 2, st         # the weather turn was not archived
     assert (st["archival_inserts"], st["replies"], st["core_memory_edits"]) == (2, 3, 0), st
+    assert ag._c().created["agent_type"] == "memgpt_v2_agent"
+    assert "archival_memory_insert" in ag._c().created["tools"]         # without it nothing is ever archived
     hits = [h.id for h in ag.recall("car gps failing", 3)]
     assert hits[0] == "s3#0" and "s2#0" not in hits, hits            # rewritten passage -> its source turn
     assert all(isinstance(v, (int, float)) for v in st.values())      # run.py sums these
