@@ -333,7 +333,7 @@ class _FakeCur:
     def execute(self, sql, params=()):
         import re
         self.db.log.append(sql)
-        if sql.startswith("SELECT current_setting"):
+        if sql.startswith("SELECT current_setting('server_version')"):
             self.out = [("16.4", "0.8.0")]
         elif sql.startswith("SELECT current_setting('hnsw.ef_search'"):
             self.out = [("40",)]
