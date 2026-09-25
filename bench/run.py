@@ -34,6 +34,8 @@ ADAPTERS = {
     "mem0": "bench.adapters.mem0:Mem0Adapter",
     "pgvector": "bench.adapters.pgvector:PgvectorAdapter",
     "pgvector_exact": "bench.adapters.pgvector:PgvectorExactAdapter",
+    "letta_archival": "bench.adapters.letta:LettaArchivalAdapter",
+    "letta_agent": "bench.adapters.letta:LettaAgentAdapter",
 }
 
 
