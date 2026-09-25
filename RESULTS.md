@@ -1335,6 +1335,7 @@ where the medium's ranking beats the dot product") was three questions; retract 
 unchanged is the cost column. The distinguishing claims the paper still needs are the ones no
 retrieval table here can make (consolidation, supersession, long-lived stores), and the
 2026-09-19 consolidation arm was negative.
+
 ## 2026-09-25 — LongMemEval-M (first run): 30 questions at ~4,900 turns each, k=15
 
 `longmemeval_m` (sha256 `fb5413e3…`, 2.7 GB, streamed with `ijson`): the same 500 questions as
