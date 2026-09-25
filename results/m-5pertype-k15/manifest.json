@@ -1,0 +1,171 @@
+{
+ "run_id": "m-5pertype-k15",
+ "started_at": "2026-09-25T22:45:11.192426+00:00",
+ "commit": "a38689495978a587fea0365ffde0da889a4b90c6",
+ "dataset": {
+  "dataset": "longmemeval_m",
+  "path": "/home/jovyan/.kannaka-bench/data/longmemeval_m.json",
+  "sha256": "fb5413e3b077c62927daab794836991a2fcfa61ceacab57dc679fb02daaff2d9",
+  "questions_total": 500,
+  "limit_is_per_type": true,
+  "streamed": true
+ },
+ "adapters": [
+  "kannaka_minilm",
+  "vector_numpy",
+  "recency"
+ ],
+ "k": 15,
+ "session_cap": 0,
+ "limit": 5,
+ "max_items": 0,
+ "consolidate": false,
+ "host": "jupyter-nflach78-40gmail-2ecom-2d6988bd1c6b5c6c7c2eafda4c",
+ "platform": "Linux-6.8.0-1067-azure-x86_64-with-glibc2.39",
+ "python": "3.12.3",
+ "cpu_count": 16,
+ "stores": 30,
+ "shard": null,
+ "stores_total": 30,
+ "adapter_versions": {
+  "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+ },
+ "kannaka_flags": {
+  "kannaka_minilm": {},
+  "vector_numpy": {},
+  "recency": {}
+ },
+ "adapter_bins": {
+  "kannaka_minilm": {
+   "path": "/home/jovyan/bin/kannaka",
+   "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+  }
+ },
+ "beam": {
+  "kannaka_minilm": {
+   "recalls": 0,
+   "scored": 0,
+   "total": 0,
+   "mean_coverage": null,
+   "enabled_env": ""
+  }
+ },
+ "finished_at": "2026-09-25T22:53:22.171496+00:00",
+ "wall_s": 491.0,
+ "merged_from": [
+  "m-5pertype-k15-shard0",
+  "m-5pertype-k15-shard1"
+ ],
+ "shards": [
+  {
+   "run_id": "m-5pertype-k15-shard0",
+   "started_at": "2026-09-25T22:45:11.192444+00:00",
+   "commit": "a38689495978a587fea0365ffde0da889a4b90c6",
+   "dataset": {
+    "dataset": "longmemeval_m",
+    "path": "/home/jovyan/.kannaka-bench/data/longmemeval_m.json",
+    "sha256": "fb5413e3b077c62927daab794836991a2fcfa61ceacab57dc679fb02daaff2d9",
+    "questions_total": 500,
+    "limit_is_per_type": true,
+    "streamed": true
+   },
+   "adapters": [
+    "kannaka_minilm",
+    "vector_numpy",
+    "recency"
+   ],
+   "k": 15,
+   "session_cap": 0,
+   "limit": 5,
+   "max_items": 0,
+   "consolidate": false,
+   "host": "jupyter-nflach78-40gmail-2ecom-2d6988bd1c6b5c6c7c2eafda4c",
+   "platform": "Linux-6.8.0-1067-azure-x86_64-with-glibc2.39",
+   "python": "3.12.3",
+   "cpu_count": 16,
+   "stores": 15,
+   "shard": "0/2",
+   "stores_total": 30,
+   "adapter_versions": {
+    "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+   },
+   "kannaka_flags": {
+    "kannaka_minilm": {},
+    "vector_numpy": {},
+    "recency": {}
+   },
+   "adapter_bins": {
+    "kannaka_minilm": {
+     "path": "/home/jovyan/bin/kannaka",
+     "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+    }
+   },
+   "beam": {
+    "kannaka_minilm": {
+     "recalls": 0,
+     "scored": 0,
+     "total": 0,
+     "mean_coverage": null,
+     "enabled_env": ""
+    }
+   },
+   "finished_at": "2026-09-25T22:53:09.464312+00:00",
+   "wall_s": 478.3
+  },
+  {
+   "run_id": "m-5pertype-k15-shard1",
+   "started_at": "2026-09-25T22:45:11.192426+00:00",
+   "commit": "a38689495978a587fea0365ffde0da889a4b90c6",
+   "dataset": {
+    "dataset": "longmemeval_m",
+    "path": "/home/jovyan/.kannaka-bench/data/longmemeval_m.json",
+    "sha256": "fb5413e3b077c62927daab794836991a2fcfa61ceacab57dc679fb02daaff2d9",
+    "questions_total": 500,
+    "limit_is_per_type": true,
+    "streamed": true
+   },
+   "adapters": [
+    "kannaka_minilm",
+    "vector_numpy",
+    "recency"
+   ],
+   "k": 15,
+   "session_cap": 0,
+   "limit": 5,
+   "max_items": 0,
+   "consolidate": false,
+   "host": "jupyter-nflach78-40gmail-2ecom-2d6988bd1c6b5c6c7c2eafda4c",
+   "platform": "Linux-6.8.0-1067-azure-x86_64-with-glibc2.39",
+   "python": "3.12.3",
+   "cpu_count": 16,
+   "stores": 15,
+   "shard": "1/2",
+   "stores_total": 30,
+   "adapter_versions": {
+    "kannaka_minilm": "kannaka 0.16.10 (consciousness-core 0.6.0)"
+   },
+   "kannaka_flags": {
+    "kannaka_minilm": {},
+    "vector_numpy": {},
+    "recency": {}
+   },
+   "adapter_bins": {
+    "kannaka_minilm": {
+     "path": "/home/jovyan/bin/kannaka",
+     "sha256": "2ddc7aecd5fc0b3b2af0154ce81bab80dd925fa29244ff0ea9091cae93a33caa"
+    }
+   },
+   "beam": {
+    "kannaka_minilm": {
+     "recalls": 0,
+     "scored": 0,
+     "total": 0,
+     "mean_coverage": null,
+     "enabled_env": ""
+    }
+   },
+   "finished_at": "2026-09-25T22:53:22.171496+00:00",
+   "wall_s": 491.0
+  }
+ ]
+}

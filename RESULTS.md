@@ -1335,3 +1335,51 @@ where the medium's ranking beats the dot product") was three questions; retract 
 unchanged is the cost column. The distinguishing claims the paper still needs are the ones no
 retrieval table here can make (consolidation, supersession, long-lived stores), and the
 2026-09-19 consolidation arm was negative.
+
+## 2026-09-25 — LongMemEval-M (first run): 30 questions at ~4,900 turns each, k=15
+
+`longmemeval_m` (sha256 `fb5413e3…`, 2.7 GB, streamed with `ijson`): the same 500 questions as
+`_s` with ~10× the haystack (~500 sessions, ~1.5M tokens per question). First 5 per type in the
+M file's order (`results/m-5pertype-k15/m30-ids.txt`; 25 of them are the standard S 30), standard
+setting (k=15, facets off, MiniLM, binary `0.16.10` sha256 `2ddc7aec…`), stores dropped once
+scored. Host: the same qBraid lab2 pod as the n=500 run (2 shards; 18 questions before the
+21:41Z pod stop, 12 after, `--resume`). Six kannaka rows overlapped another agent's
+`llama-server` (their ingest ran at 107–125 ms/item instead of ~54); latency below is quoted on
+all 30 and on the 24 uncontended rows. The S column is the same 30 question ids from the n=500 run.
+
+| adapter | haystack | hit@15 | recall@15 | evid@15 | MRR | recall p50 | recall p95 | ingest ms/item | store / question |
+|---|---|---|---|---|---|---|---|---|---|
+| kannaka_minilm | S (~500 turns) | 1.000 | 0.983 | 0.883 | 0.932 | 745 ms | 1.1 s | 50 | 23 MB |
+| kannaka_minilm | **M (~4,900 turns)** | **0.933** [0.787, 0.982] | **0.853** [0.736, 0.950] | **0.700** [0.556, 0.839] | 0.689 | **10.8 s** (10.7 s clean) | 18.5 s (12.0 s clean) | 66 (54 clean) | **210 MB** |
+| vector_numpy (MiniLM cosine) | S | 1.000 | 0.983 | 0.844 | 0.934 | 15 ms | 38 ms | 56 ¹ | 0.8 MB |
+| vector_numpy | **M** | **0.900** [0.744, 0.965] | **0.819** [0.692, 0.933] | **0.700** [0.556, 0.839] | 0.673 | **18 ms** | 38 ms | 56 ¹ | **7.7 MB** |
+| recency | M | 0.000 | 0.000 | 0.000 | 0.000 | 0 | 0 | — | — |
+
+¹ one-thread in-process embedding; not comparable to kannaka's embed-server column.
+
+Paired, same 30 questions:
+- **M vs S, each system loses about the same ground.** kannaka: recall@15 −0.131 [−0.242,
+  −0.039], evid −0.183 [−0.294, −0.083], MRR −0.243; cosine: recall −0.164 [−0.289, −0.056], evid
+  −0.144 [−0.250, −0.056], MRR −0.262. No question got better at M for either. Ten times the
+  distractors push evidence below rank 15 for 7–9 of 30 questions and push the first gold
+  turn down the list (MRR 0.93 → 0.68).
+- **kannaka vs cosine at M: a tie.** hit@15 +0.033 [+0.000, +0.100] (1 question, 1/0/29), recall
+  the same single question, evid +0.000 (30 ties), MRR +0.016 [−0.007, +0.053] (4/2/24). The
+  medium's ranking does not resist distractors better than the dot product; at n=30 it cannot be
+  said to resist them worse either.
+
+**The known loss, measured at scale:**
+- **Recall latency grows faster than the store.** kannaka's p50 goes from 745 ms at ~500 turns to
+  10.7 s at ~4,900 (uncontended rows): **14× for 9.9× the items**, about n^1.17, on one
+  `recall` spawn that loads the store. Cosine goes 15 → 18 ms. At M scale a kannaka recall
+  costs **~600× the dot product**, against ~47× at S. This is kannaka-memory #977/#978's shape
+  with a number on it: a per-query cost linear-or-worse in store size is the thing that keeps the
+  medium out of M-sized deployments, independent of ranking quality.
+- **Ingest is flat in n** (54 ms/item at M on clean rows vs 50 at S): the #1039 chiral-from-birth
+  ingest holds at 10× — a ~4,900-turn store ingests in ~4.5 min.
+- **Footprint: 210 MB per question** (42.6 KB/item) vs 7.7 MB for the embedding matrix — 27×.
+  M in full (500 questions) would be ~105 GB of kannaka stores.
+
+What this does not cover: n=30 only (one question = 0.033 overall, 0.20 in a type), no answer pass
+(the Claude answer model is capped until 2026-10-01), and one host. The M rows are retrieval
+parity plus a latency loss that gets worse with scale.
