@@ -207,6 +207,106 @@ def test_run_end_to_end_with_recency_and_report():
         assert "1.000" in text
 
 
+def test_shards_cover_every_store_once():
+    from bench import run as runmod
+    stores = [(f"s{i}", [], [], "session") for i in range(11)]
+    parts = [runmod.shard_stores(stores, f"{i}/3") for i in range(3)]
+    ids = [st[0] for p in parts for st in p]
+    assert sorted(ids) == sorted(st[0] for st in stores) and len(ids) == len(set(ids)), ids
+    assert [st[0] for st in parts[1]] == ["s1", "s4", "s7", "s10"]
+    assert runmod.shard_stores(stores, None) == stores
+    for bad in ("3/3", "-1/2", "0/0"):
+        try:
+            runmod.parse_shard(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"--shard {bad} accepted")
+
+
+def test_merge_joins_shards_and_refuses_duplicates():
+    from bench import merge
+    with tempfile.TemporaryDirectory() as d:
+        base = {"adapters": ["recency"], "k": 15, "session_cap": 0, "limit": None, "commit": "c",
+                "stores_total": 2, "dataset": {"sha256": "x"}, "wall_s": 1.0, "started_at": "a", "finished_at": "b"}
+        dirs = []
+        for i in range(2):
+            sd = os.path.join(d, f"sh{i}")
+            os.makedirs(sd)
+            json.dump(dict(base, shard=f"{i}/2", stores=1, wall_s=10.0 * (i + 1)), open(os.path.join(sd, "manifest.json"), "w"))
+            with open(os.path.join(sd, "results.jsonl"), "w") as f:
+                f.write(json.dumps({"adapter": "recency", "question_id": f"q{i}"}) + "\n")
+            dirs.append(sd)
+        out = merge.merge(os.path.join(d, "all"), dirs)
+        assert out["rows"] == 2 and out["stores"] == 2, out
+        m = json.load(open(os.path.join(d, "all", "manifest.json")))
+        assert m["wall_s"] == 20.0 and len(m["shards"]) == 2 and m["run_id"] == "all"
+        for bad in ([dirs[0], dirs[0]], [dirs[0], "overlap"]):
+            if bad[1] == "overlap":       # a different shard that re-ran q0
+                bad[1] = os.path.join(d, "overlap")
+                os.makedirs(bad[1])
+                json.dump(dict(base, shard="1/2", stores=1), open(os.path.join(bad[1], "manifest.json"), "w"))
+                with open(os.path.join(dirs[0], "results.jsonl")) as src, open(os.path.join(bad[1], "results.jsonl"), "w") as dst:
+                    dst.write(src.read())
+            try:
+                merge.merge(os.path.join(d, "bad"), bad)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"merge accepted {bad}")
+
+
+def test_stats_intervals_and_pairing():
+    from bench import stats
+    lo, hi = stats.wilson(5, 5)
+    assert abs(lo - 0.5655) < 1e-3 and hi == 1.0, (lo, hi)      # 5/5 is NOT certainty
+    lo, hi = stats.wilson(50, 100)
+    assert abs(lo - 0.4038) < 1e-3 and abs(hi - 0.5962) < 1e-3, (lo, hi)
+    rows = []
+    for i in range(40):
+        t = "a" if i < 20 else "b"
+        rows.append({"adapter": "X", "question_id": f"q{i}", "qtype": t, "gold": ["g"], "any_hit_at_k": True,
+                     "recall_at_k": 1.0, "evidence_coverage_at_k": 1.0, "mrr": 1.0})
+        rows.append({"adapter": "Y", "question_id": f"q{i}", "qtype": t, "gold": ["g"], "any_hit_at_k": i % 2 == 0,
+                     "recall_at_k": 0.5, "evidence_coverage_at_k": None, "mrr": 0.5})
+    rows.append({"adapter": "Y", "question_id": "err", "qtype": "a", "error": "boom"})
+    rows.append({"adapter": "Y", "question_id": "nogold", "qtype": "a", "gold": [], "any_hit_at_k": False})
+    res = stats.analyse(rows, ("X", "Y"), n_boot=2000)
+    assert res["overall"]["Y"]["n"] == 40, "error and gold-less rows are unscored"
+    assert res["overall"]["Y"]["evidence_coverage_at_k"] is None
+    p = res["paired"]["any_hit_at_k"]
+    assert p["n"] == 40 and p["a_better"] == 20 and p["b_better"] == 0 and p["ties"] == 20, p
+    assert p["lo"] > 0, "X beats Y on every question it differs: the interval must exclude 0"
+    assert res["paired"]["evidence_coverage_at_k"] is None, "evid pairs only where both have it"
+    sub = stats.analyse(rows, ("X", "Y"), ids={"q0", "q1"}, n_boot=500)
+    assert sub["overall"]["X"]["n"] == 2
+    assert "hit@k" in stats.render(res, ("X", "Y"))
+
+
+def test_longmemeval_load_by_ids_and_stream():
+    import importlib.util
+    with tempfile.TemporaryDirectory() as d:
+        data = [dict(LME[0], question_id=f"q{i}", question_type=("t1" if i % 2 else "t2")) for i in range(6)]
+        path = os.path.join(d, "longmemeval_s.json")
+        json.dump(data, open(path, "w"))
+        old_dir, old_bytes = longmemeval.DATA_DIR, longmemeval.STREAM_BYTES
+        longmemeval.DATA_DIR = d
+        try:
+            qs, meta = longmemeval.load("longmemeval_s", limit=1)
+            assert [q.id for q in qs] == ["q0", "q1"] and not meta["streamed"]
+            qs, meta = longmemeval.load("longmemeval_s", limit=1, question_ids={"q3", "q4"})
+            assert [q.id for q in qs] == ["q3", "q4"] and not meta["limit_is_per_type"]
+            if importlib.util.find_spec("ijson"):
+                longmemeval.STREAM_BYTES = 1          # force the streaming path
+                qs2, meta2 = longmemeval.load("longmemeval_s", limit=2)
+                qs1, _ = (longmemeval.questions_from(data, 2), None)
+                assert meta2["streamed"] and [q.id for q in qs2] == [q.id for q in qs1], "stream == stratified"
+                assert [it.id for it in qs2[0].items] == [it.id for it in qs1[0].items]
+                qs3, _ = longmemeval.load("longmemeval_s", question_ids={"q5"})
+                assert [q.id for q in qs3] == ["q5"] and meta2["questions_total"] == 6
+        finally:
+            longmemeval.DATA_DIR, longmemeval.STREAM_BYTES = old_dir, old_bytes
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

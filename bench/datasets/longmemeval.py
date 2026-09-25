@@ -111,8 +111,47 @@ def questions_from(data: list[dict], limit: int | None = None) -> list[Question]
     return out
 
 
-def load(variant: str = "longmemeval_oracle", limit: int | None = None) -> tuple[list[Question], dict]:
+def stream_select(path: str, limit: int | None = None, ids: set[str] | None = None) -> tuple[list[dict], int]:
+    """Stratified selection WITHOUT holding the whole file: `longmemeval_m` is
+    ~2.7 GB of JSON (~500 sessions per question), and `json.load` on it needs
+    more RAM than a 25 GB pod has. Streams one question object at a time
+    (ijson) and keeps the same questions `stratified()` would — the first N per
+    type in file order — or exactly `ids`. Returns (kept, questions_total)."""
+    import ijson
+    taken: dict[str, int] = {}
+    keep, total = [], 0
+    with open(path, "rb") as f:
+        for q in ijson.items(f, "item", use_float=True):
+            total += 1
+            if ids is not None:
+                if q.get("question_id") in ids:
+                    keep.append(q)
+                continue
+            t = q.get("question_type", "")
+            if not limit or taken.get(t, 0) < limit:
+                taken[t] = taken.get(t, 0) + 1
+                keep.append(q)
+    return keep, total
+
+
+#: files at least this big are streamed (ijson) instead of json.load-ed
+STREAM_BYTES = int(os.environ.get("KANNAKA_BENCH_STREAM_BYTES", str(1 << 30)))
+
+
+def load(variant: str = "longmemeval_oracle", limit: int | None = None,
+         question_ids: set[str] | None = None) -> tuple[list[Question], dict]:
+    """`question_ids` selects exactly those questions (limit is then ignored)."""
     path = fetch(variant)
-    data = json.load(open(path, encoding="utf-8"))
-    return questions_from(data, limit), {"dataset": variant, "path": path, "sha256": sha256_file(path), "questions_total": len(data),
-                                         "limit_is_per_type": bool(limit)}
+    streamed = os.path.getsize(path) >= STREAM_BYTES
+    if streamed:
+        data, total = stream_select(path, None if question_ids else limit, question_ids)
+        qs = questions_from(data, None)
+    else:
+        data = json.load(open(path, encoding="utf-8"))
+        total = len(data)
+        if question_ids is not None:
+            data = [q for q in data if q.get("question_id") in question_ids]
+            limit = None
+        qs = questions_from(data, limit)
+    return qs, {"dataset": variant, "path": path, "sha256": sha256_file(path), "questions_total": total,
+                "limit_is_per_type": bool(limit) and question_ids is None, "streamed": streamed}

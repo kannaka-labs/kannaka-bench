@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -79,6 +80,26 @@ def session_cap(hits, k: int, cap: int, level: str):
         if len(out) == k:
             break
     return out
+
+
+def parse_shard(spec: str | None) -> tuple[int, int]:
+    """'I/N' -> (I, N), 0 <= I < N. None -> (0, 1): every store."""
+    if not spec:
+        return 0, 1
+    i, _, n = spec.partition("/")
+    i, n = int(i), int(n)
+    if n < 1 or not 0 <= i < n:
+        raise ValueError(f"--shard wants I/N with 0 <= I < N, got {spec!r}")
+    return i, n
+
+
+def shard_stores(stores: list, spec: str | None) -> list:
+    """Store-level round-robin split: shard I of N keeps stores I, I+N, I+2N...
+    in the loader's order, so N shards together run every store exactly once
+    and each shard gets a mix of question types (the loader is in file order,
+    which is grouped by type)."""
+    i, n = parse_shard(spec)
+    return [st for j, st in enumerate(stores) if j % n == i]
 
 
 def run_store(adapter: Adapter, run_dir: str, items, questions, k: int, level: str, rows: list, ds: str,
@@ -153,6 +174,10 @@ def main(argv=None):
                     help="comma list of adapters the --max-items cap applies to")
     ap.add_argument("--question-ids", default=None,
                     help="file with one question_id per line: run exactly these questions (E-L3c's held-out set)")
+    ap.add_argument("--shard", default=None,
+                    help="I/N: run only stores I, I+N, ... (merge shard dirs with `python -m bench.merge`)")
+    ap.add_argument("--drop-stores", action="store_true",
+                    help="delete each store's directory once it is scored (LongMemEval-M: ~0.5 GB per kannaka store)")
     ap.add_argument("--resume", action="store_true",
                     help="keep the run dir's existing non-error rows and skip those (adapter, question) pairs")
     a = ap.parse_args(argv)
@@ -173,12 +198,15 @@ def main(argv=None):
         stores = [(cid, items, qs, "turn") for cid, items, qs in convs]
     else:
         from .datasets import longmemeval
-        qs, dsmeta = longmemeval.load(a.dataset, limit=a.limit)
+        keep = None
         if a.question_ids:
             keep = {l.strip() for l in open(a.question_ids, encoding="utf-8") if l.strip()}
-            qs = [q for q in qs if q.id in keep]
+        qs, dsmeta = longmemeval.load(a.dataset, limit=a.limit, question_ids=keep)
+        if keep is not None:
             print(f"[run] --question-ids: {len(qs)} of {len(keep)} requested questions found", flush=True)
         stores = [(q.id, q.items, [q], "session") for q in qs]
+    stores_total = len(stores)
+    stores = shard_stores(stores, a.shard)
 
     adapters = {n: make_adapter(n) for n in names}
     manifest = {
@@ -187,6 +215,7 @@ def main(argv=None):
         "max_items": a.max_items, "consolidate": a.consolidate,
         "host": platform.node(), "platform": platform.platform(), "python": sys.version.split()[0],
         "cpu_count": os.cpu_count(), "stores": len(stores),
+        "shard": a.shard, "stores_total": stores_total,
         "adapter_versions": {},
         # Ranking flags belong beside the numbers they produced. Three arms of a
         # temporal A/B were written with no record of which flag each ran with,
@@ -238,8 +267,14 @@ def main(argv=None):
             try:
                 run_store(ad, run_dir, items, questions, a.k, level, rows, a.dataset, cap=a.session_cap,
                           consolidate=a.consolidate)
-                if n == "kannaka" and getattr(ad, "version", None):
-                    manifest["adapter_versions"]["kannaka"] = ad.version
+                # Every kannaka arm, not only the one named "kannaka": the
+                # standard-setting manifest (kannaka_minilm) recorded no binary
+                # at all, so which build produced the published row lived only
+                # in prose. Version string + resolved path + sha256.
+                if getattr(ad, "version", None):
+                    manifest["adapter_versions"][n] = ad.version
+                if getattr(ad, "bin_info", None):
+                    manifest.setdefault("adapter_bins", {})[n] = ad.bin_info
                 # Whether the attention beam actually fired, and how sparse it
                 # was. Without this a "beam" arm and a dense arm are
                 # indistinguishable in the record.
@@ -257,6 +292,8 @@ def main(argv=None):
                     rows.append({"dataset": a.dataset, "adapter": n, "question_id": q.id, "qtype": q.qtype,
                                  "error": f"{type(e).__name__}: {str(e)[:200]}"})
                 print(f"[{sid}] {n}: FAILED {type(e).__name__}: {str(e)[:120]}", flush=True)
+            if a.drop_stores:
+                shutil.rmtree(os.path.join(work, sid), ignore_errors=True)
         done = sum(1 for r in rows if "error" not in r)
         print(f"[{si + 1}/{len(stores)}] {sid}: {len(items)} items, {len(questions)} q, rows so far {done}", flush=True)
         with open(os.path.join(out_dir, "results.jsonl"), "w", encoding="utf-8") as f:

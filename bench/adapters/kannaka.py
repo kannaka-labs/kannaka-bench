@@ -26,12 +26,29 @@ from .base import Adapter, MemoryItem, RecallHit, dir_bytes
 BIN = os.environ.get("KANNAKA_BIN", "kannaka")
 
 
+def _bin_info(bin_path: str) -> dict:
+    """Resolved path + sha256 of the binary, so a row names its build."""
+    import hashlib
+    import shutil
+    path = shutil.which(bin_path) or bin_path
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return {"path": os.path.abspath(path), "sha256": h.hexdigest()}
+    except OSError:
+        return {"path": path, "sha256": None}
+
+
 class KannakaAdapter(Adapter):
     name = "kannaka"
 
-    def __init__(self, bin_path: str = BIN, timeout_s: float = 60.0):
+    def __init__(self, bin_path: str = BIN, timeout_s: float | None = None):
         self.bin = bin_path
-        self.timeout_s = timeout_s
+        # One recall spawn loads the whole store; on a LongMemEval-M store
+        # (~10k turns, ~0.5 GB) 60 s is not a safe ceiling. BENCH_KANNAKA_TIMEOUT.
+        self.timeout_s = timeout_s if timeout_s is not None else float(os.environ.get("BENCH_KANNAKA_TIMEOUT", "60"))
         self.dir = None
         self.env = None
         self.by_kid: dict[str, str] = {}      # kannaka memory id -> item id
@@ -116,9 +133,11 @@ class KannakaAdapter(Adapter):
                         KANNAKA_FACET_DECOMPOSE=os.environ.get("KANNAKA_FACET_DECOMPOSE", "0"))
         try:
             self.version = subprocess.run([self.bin, "--version"], capture_output=True, text=True,
-                                          timeout=10).stdout.strip()
+                                          timeout=10).stdout.strip().partition("\n")[0]
         except Exception:
             self.version = "unknown"
+        if not getattr(self, "bin_info", None):
+            self.bin_info = _bin_info(self.bin)
         self.by_kid.clear()
         self.text_of.clear()
 
