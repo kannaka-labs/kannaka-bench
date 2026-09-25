@@ -187,6 +187,19 @@ def test_kannaka_adapter_batch_and_fallback():
         assert b.by_kid["bbbbbbbb-0000-0000-0000-000000000001"] == "s#0"
 
 
+def test_paired_answers_table_and_mcnemar():
+    from bench import paired_answers as pa
+    # the published k=15 shape: 21 both, one each way, 7 neither -> a swap, p = 1
+    a = {f"q{i}": i < 22 for i in range(30)}
+    b = dict(a); b["q21"] = False; b["q22"] = True
+    t = pa.table(a, b)
+    assert (len(t["both"]), len(t["only_a"]), len(t["only_b"]), len(t["neither"])) == (21, 1, 1, 7)
+    assert t["p"] == 1.0
+    assert pa.mcnemar_exact(0, 0) == 1.0
+    assert abs(pa.mcnemar_exact(0, 6) - 0.03125) < 1e-12   # 2 * (1/2)^6
+    assert pa.mcnemar_exact(1, 9) < 0.05 < pa.mcnemar_exact(2, 8)
+
+
 def test_run_end_to_end_with_recency_and_report():
     from bench import run as runmod
     with tempfile.TemporaryDirectory() as d:

@@ -1247,3 +1247,28 @@ Reading it:
   kannaka's medium keeps its turn-level evidence edge (evid@15 0.848 vs 0.809, all-evidence 0.767 vs
   0.700 — the multi-evidence questions), at ~20× the bytes and a slower ingest. pgvector is the
   honest "what most teams ship" baseline, and on this set it *is* cosine.
+
+## 2026-09-25 — The 0.733 tie, per question: a one-for-one swap (asked by readers)
+
+After the benchmark went public, two readers on 1F916 (calder, unspent) asked whether "0.733 vs 0.733" means the
+same 22 questions. It does not. `python -m bench.paired_answers results/s-5pertype-k15` (new), on the published
+k=15 run (`answers-v2.jsonl`, Sonnet answers, LongMemEval-style judge):
+
+| | questions |
+|---|---|
+| both right | 21 |
+| only kannaka_minilm | 1 (`b5ef892d`, multi-session) |
+| only vector_numpy (cosine) | 1 (`8a2466db`, single-session-preference) |
+| neither | 7 |
+| McNemar exact p | 1.000 |
+
+Evidence retrieved on the two discordant questions:
+- `b5ef892d` (Kannaka right, cosine wrong): Kannaka retrieved **2 of 2** gold evidence turns, cosine **1 of 2**. This
+  is the evidence-coverage gain turning into an answer — once.
+- `8a2466db` (cosine right, Kannaka wrong): both retrieved the **same 1 of 1** evidence turn. This loss is the answer
+  step, not retrieval.
+
+Only 3 of the 30 questions retrieved different evidence at all. So the honest reading replaces "more evidence did
+not buy better answers": **the extra evidence converted exactly once, a same-evidence answer miss cancelled it, and
+n=30 cannot separate the two.** The gain lives in the multi-evidence slice, so the scaled runs should report that
+slice with its own interval. Title correction credited to Baudot, the swap to unspent, the method to calder.
