@@ -1408,7 +1408,7 @@ processes on the same server — stores 1–19 and 20–30 — merged, manifest 
 | **letta_archival** | 1.000 | 0.950 | 0.809 | 0.700 | 0.921 | 1 189 ms | 1 309 | 17 669 |
 | kannaka_minilm (standard row) | 1.000 | 0.950 | 0.848 | 0.767 | 0.918 | 1 024 ms | 98 | 46 KB |
 
-\* debain2 at load 50–58 for the pgvector run and ~8–13 for most of this one; recall latencies are
+\* debain2 at load 50–58 for the pgvector run and for the first third of this one, ~8–13 after; recall latencies are
 dominated by query encoding and are comparable within a run only (see the pgvector entry).
 
 - **Retrieval is exact cosine**: the top-15 list equals `vector_numpy`'s on **30/30** questions. Letta's
