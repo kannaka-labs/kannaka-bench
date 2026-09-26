@@ -1,0 +1,76 @@
+{
+ "run_id": "s-5pertype-k15-letta-archival",
+ "started_at": "2026-09-25T21:41:25.670202+00:00",
+ "commit": "257becf282416957f1e60d7a660c53bf3dba84e4",
+ "dataset": {
+  "dataset": "longmemeval_s",
+  "path": "/home/nick/.kannaka-bench/data/longmemeval_s.json",
+  "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+  "questions_total": 500,
+  "limit_is_per_type": false,
+  "streamed": false
+ },
+ "adapters": [
+  "letta_archival"
+ ],
+ "k": 15,
+ "session_cap": 0,
+ "limit": 5,
+ "max_items": 0,
+ "consolidate": false,
+ "host": "nick-debain2",
+ "platform": "Linux-6.12.107+deb13-amd64-x86_64-with-glibc2.41",
+ "python": "3.13.5",
+ "cpu_count": 20,
+ "stores": 30,
+ "shard": null,
+ "stores_total": 11,
+ "adapter_versions": {},
+ "kannaka_flags": {
+  "letta_archival": {}
+ },
+ "adapter_config": {
+  "letta_archival": {
+   "server": "letta V1 API server (retired; last release 0.16.8)",
+   "server_version": "0.16.8",
+   "arm": "letta_archival",
+   "llm": null,
+   "embedding": {
+    "embedding_endpoint_type": "openai",
+    "embedding_endpoint": "http://127.0.0.1:11437/v1",
+    "embedding_model": "all-minilm",
+    "embedding_dim": 384,
+    "embedding_chunk_size": 300
+   }
+  }
+ },
+ "ingest_stats": {
+  "letta_archival": {
+   "llm_calls": 0,
+   "prompt_tokens": 0,
+   "completion_tokens": 0,
+   "dropped_turns": 0,
+   "ingest_errors": 0,
+   "passages": 521,
+   "turns": 521,
+   "archival_inserts": 0,
+   "core_memory_edits": 0,
+   "replies": 0,
+   "other_tool_calls": 0
+  }
+ },
+ "finished_at": "2026-09-25T23:50:57.954337+00:00",
+ "wall_s": 7772.3,
+ "merged_from": {
+  "head": {
+   "dir": "s-5pertype-k15-letta-archival",
+   "stores": 19,
+   "note": "stopped at store 20 (no manifest of its own); same adapter code (archival arm unchanged)"
+  },
+  "tail": {
+   "dir": "s-5pertype-k15-letta-archival-tail",
+   "stores": 11,
+   "commit": "257becf282416957f1e60d7a660c53bf3dba84e4"
+  }
+ }
+}

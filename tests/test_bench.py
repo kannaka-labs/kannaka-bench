@@ -410,6 +410,77 @@ def test_pgvector_adapter_attributes_by_item_id_and_cleans_up():
             assert db.tables == {}, db.tables                        # nothing left in the database
 
 
+class _FakeLetta:
+    """letta_client.Letta, only the calls the adapter makes. The fake 'agent'
+    archives every other turn it is sent, rewritten, with no tags — so the
+    test exercises attribution-by-arrival and the dropped-turn count."""
+    def __init__(self):
+        from types import SimpleNamespace as NS
+        self.store, self.deleted, self.n = {}, [], 0
+        me = self
+
+        def create_agent(**kw):
+            me.store = {}
+            me.created = kw
+            return NS(id="agent-1", tools=[NS(name=t) for t in kw.get("tools", [])])
+
+        def p_create(agent_id, text, tags=None, created_at=None):
+            me.n += 1
+            me.store[f"p{me.n}"] = (text, tags or [])
+            return [NS(id=f"p{me.n}")]
+
+        def p_list(agent_id, **kw):
+            return [NS(id=i) for i in me.store]
+
+        def p_search(agent_id, query, top_k):
+            words = set(query.lower().split())
+            ranked = sorted(me.store.items(), key=lambda kv: -len(words & set(kv[1][0].lower().split())))
+            return NS(results=[NS(id=i, content=t, tags=tg) for i, (t, tg) in ranked[:top_k]])
+
+        def m_create(agent_id, messages):
+            text = messages[0]["content"]
+            if "kayak" in text or "gps" in text.lower():          # the agent chooses what to keep
+                me.n += 1
+                me.store[f"p{me.n}"] = ("User mentioned: " + text, [])
+            calls = [NS(message_type="tool_call_message", tool_call=NS(name="archival_memory_insert"))]                 if ("kayak" in text or "gps" in text.lower()) else []
+            return NS(usage=NS(step_count=2, prompt_tokens=900, completion_tokens=40),
+                      messages=calls + [NS(message_type="assistant_message", content="ok")])
+
+        self.agents = NS(create=create_agent, delete=lambda i: me.deleted.append(i),
+                         passages=NS(create=p_create, list=p_list, search=p_search),
+                         messages=NS(create=m_create))
+
+    def health(self):
+        from types import SimpleNamespace as NS
+        return NS(version="0.16.8")
+
+
+def test_letta_adapters_attribute_by_tag_and_by_arrival():
+    from bench.adapters.letta import LettaAgentAdapter, LettaArchivalAdapter
+    items = [MemoryItem(id="s1#0", text="I bought a red kayak"),
+             MemoryItem(id="s2#0", text="the weather is fine"),
+             MemoryItem(id="s3#0", text="my car GPS keeps failing")]
+    ar = LettaArchivalAdapter(client=_FakeLetta())
+    ar.open("/tmp/q1")
+    ar.ingest(items)
+    assert [h.id for h in ar.recall("red kayak", 2)][0] == "s1#0"
+    assert ar.ingest_stats()["llm_calls"] == 0 and ar.ingest_stats()["passages"] == 3
+    ar.close()
+    assert ar._c().deleted == ["agent-1"]                     # the agent is deleted on close
+    ag = LettaAgentAdapter(client=_FakeLetta())
+    ag.open("/tmp/q1")
+    ag.ingest(items)
+    st = ag.ingest_stats()
+    assert st["llm_calls"] == 6 and st["prompt_tokens"] == 2700, st      # 2 steps x 3 turns, from usage
+    assert st["dropped_turns"] == 1 and st["passages"] == 2, st         # the weather turn was not archived
+    assert (st["archival_inserts"], st["replies"], st["core_memory_edits"]) == (2, 3, 0), st
+    assert ag._c().created["agent_type"] == "memgpt_v2_agent"
+    assert "archival_memory_insert" in ag._c().created["tools"]         # without it nothing is ever archived
+    hits = [h.id for h in ag.recall("car gps failing", 3)]
+    assert hits[0] == "s3#0" and "s2#0" not in hits, hits            # rewritten passage -> its source turn
+    assert all(isinstance(v, (int, float)) for v in st.values())      # run.py sums these
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
