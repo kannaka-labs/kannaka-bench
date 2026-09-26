@@ -1383,3 +1383,58 @@ Paired, same 30 questions:
 What this does not cover: n=30 only (one question = 0.033 overall, 0.20 in a type), no answer pass
 (the Claude answer model is capped until 2026-10-01), and one host. The M rows are retrieval
 parity plus a latency loss that gets worse with scale.
+
+## 2026-09-25 — Letta: archival memory row (identical to cosine) and the agent arm's first finding
+
+**Which Letta.** The Letta V1 API server — MemGPT's core/archival/recall memory — was retired in
+2026; its last release is **0.16.8** (`letta/letta:0.16.8`, source on the `archive` branch of
+letta-ai/letta). `pip install letta` and `letta/letta:latest` are now **Letta Code**, whose memory is
+an agent-edited markdown filesystem with no ranked-retrieval API, so there is nothing there to score by
+item id. These rows measure the last self-hostable Letta memory server, on Postgres 16 + pgvector
+(the same container as the pgvector row, database `letta`). Adapter `bench/adapters/letta.py`.
+
+**`letta_archival`** — every turn inserted into an agent's archival memory
+(`passages.create(text, tags=[item_id], created_at=when)`), recalled with `passages.search` (the API
+behind the agent's own `archival_memory_search` tool). No LLM. Encoder held fixed: the agent's
+`embedding_config` points at the bench embed server's OpenAI endpoint (the same all-MiniLM-L6-v2
+weights). Same 30 question ids, k=15. Run `s-5pertype-k15-letta-archival` (commit `257becf`; two
+processes on the same server — stores 1–19 and 20–30 — merged, manifest records both), raw rows in
+`results/s-5pertype-k15-letta-archival/`.
+
+| adapter (k=15) | hit@15 | recall@15 | evid@15 | all-evid@15 | MRR | recall p50 | ingest ms/item | bytes/item |
+|---|---|---|---|---|---|---|---|---|
+| vector_numpy (09-25 pgvector run) | 1.000 | 0.950 | 0.809 | 0.700 | 0.921 | 1 126 ms* | **54.9** | **1 556** |
+| pgvector (HNSW) | 1.000 | 0.950 | 0.809 | 0.700 | 0.921 | 1 256 ms* | 63.4 | 4 738 |
+| **letta_archival** | 1.000 | 0.950 | 0.809 | 0.700 | 0.921 | 1 189 ms | 1 309 | 17 669 |
+| kannaka_minilm (standard row) | 1.000 | 0.950 | 0.848 | 0.767 | 0.918 | 1 024 ms | 98 | 46 KB |
+
+\* debain2 at load 50–58 for the pgvector run and ~8–13 for most of this one; recall latencies are
+dominated by query encoding and are comparable within a run only (see the pgvector entry).
+
+- **Retrieval is exact cosine**: the top-15 list equals `vector_numpy`'s on **30/30** questions. Letta's
+  archival search is a sequential scan over pgvector (`archival_passages` has no vector index), filtered
+  by archive. ~1.0 passage per turn: the API insert path did not chunk (15 574 passages for 15 014
+  turns plus the smoke stores).
+- **Losses, same table:** ingest **1.3 s per turn — 24× `vector_numpy`, 21× pgvector** (one HTTP
+  request, one embedding call and an ORM write per passage; a 500-turn store took 6–15 min), and
+  **17.7 KB per turn — 11× numpy, 3.7× pgvector-HNSW**: Letta stores every vector as `vector(4096)`,
+  zero-padded, whatever the model's dimension (16 KB of each row for a 384-d embedding). Deleting an
+  agent left its archive and passages in the database (299 MB after the run) — clean-up is manual.
+- So on this benchmark Letta's archival memory *is* pgvector exact search, paying for a server round
+  trip and 10× the bytes. It is the storage layer of Letta, not its memory design; that is the next arm.
+
+**`letta_agent`** — MemGPT's actual design: each turn is sent to the agent as a message and its LLM
+decides what to page into archival memory; recall = archival search over what it chose to keep, a
+passage attributed to the turn in flight when it appeared (the same rule as Mem0's `item_id`). The
+first pilot (qwen2.5:7b on 4 CPU cores, 8 turns) found a configuration trap, not a price:
+
+- ⚠⚠ **On server 0.16.8 a default agent has no tools at all** (`letta_v1_agent`), and even
+  `memgpt_v2_agent`'s base set is `conversation_search`, `memory_insert`, `memory_replace`,
+  `send_message` — **no archival tools**. The pilot agent therefore archived nothing in 8/8 turns: it
+  spent exactly one LLM step per turn writing a reply (2.8k→4.6k prompt tokens as the conversation
+  accumulated in context, 220–670 completion tokens). A row on the default configuration would score
+  ~0 and measure a chatbot, not MemGPT. The adapter now creates `memgpt_v2_agent` with
+  `archival_memory_insert` + `archival_memory_search` attached, and refuses to run if the insert tool
+  is missing.
+- The per-turn price of the corrected agent (LLM steps, tokens, seconds on a GPU, what fraction of
+  turns it archives) is measured on a qBraid RTX 4090 before any scored run — see the pricing entry.

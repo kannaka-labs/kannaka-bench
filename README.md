@@ -43,7 +43,7 @@ One interface (`bench/adapters/base.py`): `ingest(items)`, `recall(query, k)`,
 | `pgvector_exact` | the same table with no index (sequential scan) — the control that must reproduce `vector_numpy` | in |
 | `mem0`, `zep_graphiti` | their open-source local paths | next |
 | `letta_archival` | Letta's V1 API server (0.16.8 — the last self-hostable Letta memory server; current Letta is Letta Code): every turn inserted into archival memory, recalled with archival search; same MiniLM via the embed server; no LLM | in |
-| `letta_agent` | the same server, MemGPT's real design: every turn sent to the agent, its LLM decides what to archive; priced with `bench.price` before any scored run | priced |
+| `letta_agent` | the same server, MemGPT's real design: every turn sent to a `memgpt_v2_agent` (archival tools attached — 0.16.8 defaults have none), its LLM decides what to archive; priced with `bench.price` before any scored run | priced |
 
 ## Running
 
