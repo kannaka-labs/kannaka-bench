@@ -67,10 +67,15 @@ Runs are meant for debain2 (20 cores, 196 GB); the kannaka adapter needs the
 Phase 2 (answer accuracy) runs over a finished retrieval run:
 
 ```
-BENCH_LLM_URL=http://127.0.0.1:4000/v1 BENCH_LLM_KEY=... BENCH_ANSWER_MODEL=agent-brain \
+BENCH_LLM_URL=http://127.0.0.1:4000/v1 BENCH_LITELLM_KEY=... BENCH_ANSWER_MODEL=agent-brain \
 python -m bench.answer --run results/<run>/ --adapters kannaka_minilm,vector_numpy [--k 5] \
     [--full-context recency] [--tag v2]
 ```
+
+`BENCH_LITELLM_KEY` is a *budgeted* gateway key (on debain2: LiteLLM virtual key `bench`,
+`max_budget` $3 per day, models limited to `agent-brain` + the local `kannaka-brain*` aliases),
+read from the environment or from `~/.kannaka-bench-key.env` (`BENCH_KEY_FILE` to override).
+The gateway master key is refused: two pairs of afternoons on it cost $43 (2026-09-17/18 and 09-21/22).
 
 The answer model sees the top-k hits, each expanded to its turn pair, in time order
 with dates (`BENCH_EXCERPT_CHARS`, default 6000; `BENCH_PAIR_TURNS=0` to disable); a
