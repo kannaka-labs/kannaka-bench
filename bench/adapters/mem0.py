@@ -90,7 +90,10 @@ class Mem0Adapter(Adapter):
         # power a competitor's ingest would make any weak mem0 row arguable as
         # our model's fault rather than mem0's.
         llm_url = os.environ.get("BENCH_MEM0_LLM_URL", "http://172.18.0.1:11434/v1")
-        llm_key = os.environ.get("BENCH_MEM0_LLM_KEY", "ollama")
+        # Direct ollama needs no key. If BENCH_MEM0_LLM_URL is pointed at the
+        # KAX gateway instead, the key is the bench's budgeted virtual key
+        # (BENCH_LITELLM_KEY, $3/day) — never the gateway master key.
+        llm_key = os.environ.get("BENCH_MEM0_LLM_KEY") or os.environ.get("BENCH_LITELLM_KEY") or "ollama"
         embed = os.environ.get("BENCH_EMBED_URL", "http://127.0.0.1:11437/v1")
         model = os.environ.get("BENCH_MEM0_LLM", "qwen2.5:7b")
         dims = int(os.environ.get("BENCH_MEM0_DIMS", "384"))

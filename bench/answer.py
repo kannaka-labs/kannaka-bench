@@ -7,7 +7,9 @@ LongMemEval judge protocol: correct / incorrect given the reference).
       [--full-context recency]   # the plain-context baseline: the WHOLE history in the window
 
 Models are any OpenAI-compatible endpoint (the KAX gateway on the lab hosts):
-BENCH_LLM_URL (e.g. http://172.18.0.1:4000/v1), BENCH_LLM_KEY, BENCH_ANSWER_MODEL
+BENCH_LLM_URL (e.g. http://172.18.0.1:4000/v1), BENCH_LITELLM_KEY (a budgeted
+virtual key — the gateway MASTER key is never accepted here; if the variable is
+unset it is read from ~/.kannaka-bench-key.env, or BENCH_KEY_FILE), BENCH_ANSWER_MODEL
 (default agent-brain), BENCH_JUDGE_MODEL (default = answer model). Writes
 <run>/answers.jsonl (one row per question per adapter: answer, verdict,
 tokens) and prints accuracy per adapter and per question type. Re-runs skip
@@ -24,6 +26,30 @@ import sys
 import time
 import urllib.request
 from collections import defaultdict
+
+KEY_VAR = "BENCH_LITELLM_KEY"
+KEY_FILE = os.environ.get("BENCH_KEY_FILE", os.path.expanduser("~/.kannaka-bench-key.env"))
+
+
+def gateway_key() -> str:
+    """The bench's own budgeted gateway key (LiteLLM virtual key `bench`,
+    max_budget $3 / 1d). Two pairs of afternoons on the unbudgeted master key cost
+    $43 (2026-09-17/18 and 09-21/22); this is the only key the harness will use. Read from
+    $BENCH_LITELLM_KEY, else from KEY_FILE (`BENCH_LITELLM_KEY=...`, mode 0600).
+    A `LITELLM_MASTER_KEY=` line in that file is refused, not fallen back on."""
+    key = os.environ.get(KEY_VAR, "").strip()
+    if not key and os.path.exists(KEY_FILE):
+        for line in open(KEY_FILE, encoding="utf-8"):
+            if line.startswith(KEY_VAR + "="):
+                key = line.split("=", 1)[1].strip().strip('"')
+            elif line.startswith("LITELLM_MASTER_KEY="):
+                sys.exit(f"{KEY_FILE} holds the gateway MASTER key; the bench only runs on the "
+                         f"budgeted virtual key ({KEY_VAR}=...). Mint one like /srv/kax/manager/create_machine.py does.")
+    if not key:
+        sys.exit(f"{KEY_VAR} not set and {KEY_FILE} has no {KEY_VAR}= line. The bench runs on a budgeted "
+                 f"LiteLLM virtual key, never the gateway master key: put BENCH_LITELLM_KEY=sk-... in {KEY_FILE} (0600).")
+    return key
+
 
 # The plain-context baseline sends the whole history. At 400k chars that was
 # ~94k prompt tokens per question (2026-09-17) — five such rows cost more than
@@ -307,11 +333,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     url = os.environ.get("BENCH_LLM_URL", "http://127.0.0.1:4000/v1")
-    key = os.environ.get("BENCH_LLM_KEY", "")
+    key = gateway_key()
     answer_model = os.environ.get("BENCH_ANSWER_MODEL", "agent-brain")
     judge_model = os.environ.get("BENCH_JUDGE_MODEL", answer_model)
-    if not key:
-        sys.exit("BENCH_LLM_KEY not set")
 
     manifest = json.load(open(os.path.join(a.run, "manifest.json"), encoding="utf-8"))
     dataset = manifest["dataset"]["dataset"]
