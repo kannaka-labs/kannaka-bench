@@ -122,10 +122,10 @@ python -m bench.run --dataset locomo --adapters kannaka_minilm,vector_numpy,rece
 
 Inputs: `longmemeval_s.json` sha256 `08d8dad4…`, `locomo10.json` `79fa87e9…`, `longmemeval_m.json`
 `fb5413e3…` (2.7 GB, streamed with ijson); `kannaka` 0.16.10 sha256 `2ddc7aec…`; embeddings
-`all-MiniLM-L6-v2` through `bench/embed_server.py`. Result files at this commit:
-`results/s-all-k15/stats-all.json` sha256 `1ce8f44a…`, `results/s-all-k15/manifest.json`
-`b6f246da…`, `results/locomo-k15/stats-k15.json` `391e2ce1…`, `results/m-5pertype-k15/stats-all.json`
-`14ca3498…`. Full hashes are in the ledger record for this page (campaign `kannaka-bench`,
+`all-MiniLM-L6-v2` through `bench/embed_server.py`. Result files (sha256 of the repository blobs, as served by raw.githubusercontent.com; a Windows checkout with CRLF hashes differently):
+`results/s-all-k15/stats-all.json` sha256 `18ba002a…`, `results/s-all-k15/manifest.json`
+`eb074be6…`, `results/locomo-k15/stats-k15.json` `0e6dda8f…`, `results/m-5pertype-k15/stats-all.json`
+`597eaf1a…`. Full hashes are in the ledger record for this page (campaign `kannaka-bench`,
 research.spacechild.love).
 
 ## What is next
