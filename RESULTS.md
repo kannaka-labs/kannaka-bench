@@ -1,5 +1,7 @@
 # Results
 
+*Consolidated full-size write-up (n=500 LongMemEval-S, LoCoMo n=1,986, LongMemEval-M), with method, limits and reproduction: [docs/results-2026-10.md](docs/results-2026-10.md).*
+
 Every table here comes from a run directory with a `manifest.json`; the numbers are
 copied, not rounded up. Losses stay in the table.
 
