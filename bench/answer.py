@@ -199,10 +199,16 @@ def is_abstention(answer: str) -> bool:
     return len(a) < 200 and bool(ABSTAIN_RE.search(a))
 
 
-def grade(verdict: str, answer: str, gold: str) -> tuple[bool, bool]:
+def is_abstention_question(question_id: str | None, gold: str) -> bool:
+    """True when abstaining IS the right answer: LongMemEval marks these with an `_abs` id
+    suffix; the gold-text regex alone matches only 20 of its 30 (ks-cascade pre-run check)."""
+    return bool(question_id and question_id.endswith("_abs")) or bool(GOLD_UNAVAILABLE_RE.search(gold or ""))
+
+
+def grade(verdict: str, answer: str, gold: str, question_id: str | None = None) -> tuple[bool, bool]:
     """(correct, overridden). Enforces the abstention rule the judge is given."""
     correct = verdict.strip().upper().startswith("CORRECT")
-    if correct and is_abstention(answer) and not GOLD_UNAVAILABLE_RE.search(gold or ""):
+    if correct and is_abstention(answer) and not is_abstention_question(question_id, gold):
         return False, True
     return correct, False
 
@@ -397,7 +403,7 @@ def main(argv=None):
                 break
             continue
         globals()["_consec"] = 0
-        correct, judge_overridden = grade(verdict, answer, q.answer)
+        correct, judge_overridden = grade(verdict, answer, q.answer, r["question_id"])
         row = {"adapter": r["adapter"], "question_id": r["question_id"], "qtype": r["qtype"], "mode": mode,
                "n_excerpts": len(ctx_items), "excerpt_cap": EXCERPT_CHAR_CAP, "pair_turns": PAIR_TURNS,
                "per_session": a.per_session, "max_excerpts": a.max_excerpts, "max_answer_tokens": a.max_answer_tokens,
