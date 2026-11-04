@@ -487,3 +487,13 @@ if __name__ == "__main__":
             fn()
             print("ok", name)
     print("all bench tests passed")
+
+
+def test_grade_abstention_question_by_id_suffix():
+    from bench import answer
+    # A correct abstention on an `_abs` question stands even when the gold text has no "not mentioned" wording.
+    assert answer.grade("CORRECT", "I don't know.", "You mentioned a cat, not a hamster.", "0862e8bf_abs") == (True, False)
+    # The same abstention on an ordinary question is overridden to incorrect, as before.
+    assert answer.grade("CORRECT", "I don't know.", "Business Administration", "e47becba") == (False, True)
+    # Gold text that says the information is unavailable still counts without an id.
+    assert answer.grade("CORRECT", "I don't know.", "This was not mentioned.") == (True, False)
