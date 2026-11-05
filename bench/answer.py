@@ -263,6 +263,39 @@ PREFIX_CACHE_RATIO = 0.95
 TRUNCATION_RATIO = {"tokenize": 0.90, "heuristic": 0.70}
 NATIVE_FIELDS = ("prompt_eval_count", "prompt_eval_cached_count", "eval_count", "prompt_eval_duration",
                  "eval_duration", "load_duration", "total_duration", "model", "done_reason")
+# Host stamps for a serial native run (ks-cascade step 4): the CPU seconds the
+# serving instance's cgroup used during the call, the load average before it,
+# and whether a separate production server had a model loaded. All optional.
+CGROUP_CPU_STAT = os.environ.get("BENCH_CGROUP_CPU_STAT")          # e.g. /sys/fs/cgroup/system.slice/x.service/cpu.stat
+PRODUCTION_PS_URL = os.environ.get("BENCH_PRODUCTION_PS_URL")      # e.g. http://172.18.0.1:11434/api/ps
+
+
+def _cpu_stat() -> dict | None:
+    if not CGROUP_CPU_STAT:
+        return None
+    try:
+        with open(CGROUP_CPU_STAT, encoding="utf-8") as f:
+            return {k: int(v) for k, v in (l.split() for l in f if l.strip())}
+    except (OSError, ValueError):
+        return None
+
+
+def _host_stamps() -> dict:
+    out: dict = {}
+    try:
+        with open("/proc/loadavg", encoding="utf-8") as f:
+            out["loadavg_before"] = [float(x) for x in f.read().split()[:3]]
+    except (OSError, ValueError):
+        pass
+    if PRODUCTION_PS_URL:
+        try:
+            with urllib.request.urlopen(PRODUCTION_PS_URL, timeout=5) as r:
+                models = (json.load(r) or {}).get("models") or []
+            out["production_busy"] = bool(models)
+            out["production_loaded"] = len(models)
+        except Exception:  # noqa: BLE001
+            out["production_busy"] = None
+    return out
 
 
 def _post_json(url: str, body: dict, timeout: int) -> dict:
@@ -285,11 +318,19 @@ def native_chat(url: str, model: str, system: str, user: str, max_tokens: int = 
     last = None
     for attempt in range(4):
         try:
+            stamps = _host_stamps()
+            cs0 = _cpu_stat()
             d = _post_json(url.rstrip("/") + "/api/chat", body, NATIVE_TIMEOUT)
+            cs1 = _cpu_stat()
             msg = d.get("message") or {}
             text = msg.get("content") or ""
             native = {k: d.get(k) for k in NATIVE_FIELDS}
             native["think_span"] = "<think>" in text or bool(msg.get("thinking"))
+            native.update(stamps)
+            if cs0 and cs1:
+                native["cgroup_cpu_s"] = (cs1["usage_usec"] - cs0["usage_usec"]) / 1e6
+                native["cgroup_nr_throttled_delta"] = cs1.get("nr_throttled", 0) - cs0.get("nr_throttled", 0)
+            native["attempt"] = attempt
             return text.strip(), {"prompt": d.get("prompt_eval_count"), "completion": d.get("eval_count")}, native
         except urllib.error.HTTPError as e:
             body_text = ""
