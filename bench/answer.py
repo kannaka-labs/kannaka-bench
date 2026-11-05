@@ -261,8 +261,8 @@ HEURISTIC_CHARS_PER_TOKEN = 3.6
 # tighter than the heuristic one because the estimate is exact.
 PREFIX_CACHE_RATIO = 0.95
 TRUNCATION_RATIO = {"tokenize": 0.90, "heuristic": 0.70}
-NATIVE_FIELDS = ("prompt_eval_count", "eval_count", "prompt_eval_duration", "eval_duration",
-                 "load_duration", "total_duration", "model")
+NATIVE_FIELDS = ("prompt_eval_count", "prompt_eval_cached_count", "eval_count", "prompt_eval_duration",
+                 "eval_duration", "load_duration", "total_duration", "model", "done_reason")
 
 
 def _post_json(url: str, body: dict, timeout: int) -> dict:
