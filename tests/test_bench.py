@@ -497,3 +497,224 @@ def test_grade_abstention_question_by_id_suffix():
     assert answer.grade("CORRECT", "I don't know.", "Business Administration", "e47becba") == (False, True)
     # Gold text that says the information is unavailable still counts without an id.
     assert answer.grade("CORRECT", "I don't know.", "This was not mentioned.") == (True, False)
+
+
+# ---- ks-cascade: the native ollama answer path, sealed rows, quiet printing ----
+
+class _OllamaStub:
+    """A local HTTP server standing in for ollama (/api/chat, /api/tokenize) and
+    the OpenAI gateway (/v1/chat/completions). Tokenize counts words; chat reports
+    that count plus a few template tokens as prompt_eval_count unless the test
+    pins it. Every request body is kept for assertions."""
+
+    def __init__(self, tokenize=True, prompt_eval=None, content="a kayak"):
+        import http.server
+        import threading
+        stub = self
+        self.requests, self.tokenize, self.prompt_eval, self.content = [], tokenize, prompt_eval, content
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                stub.requests.append((self.path, body))
+                if self.path == "/api/tokenize":
+                    if not stub.tokenize:
+                        self.send_response(404)
+                        self.end_headers()
+                        return
+                    out = {"tokens": list(range(len(body["prompt"].split())))}
+                elif self.path == "/api/chat":
+                    words = sum(len(m["content"].split()) for m in body["messages"])
+                    out = {"model": body["model"], "message": {"role": "assistant", "content": stub.content},
+                           "done": True, "prompt_eval_count": stub.prompt_eval or words + 4, "eval_count": 3,
+                           "prompt_eval_duration": 1500, "eval_duration": 700, "load_duration": 20, "total_duration": 2300}
+                elif self.path == "/v1/chat/completions":
+                    out = {"choices": [{"message": {"content": "CORRECT"}}], "usage": {"prompt_tokens": 40, "completion_tokens": 1}}
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                data = json.dumps(out).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+def _sha(text):
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _answer_run_dir(d):
+    """A one-row retrieval run over the LME fixture, plus the question map answer.main loads."""
+    from bench import answer
+    q = longmemeval.questions_from(LME)[0]
+    out = os.path.join(d, "run")
+    os.makedirs(out)
+    json.dump({"run_id": "t", "dataset": {"dataset": "fixture", "sha256": "abc"}, "k": 2}, open(os.path.join(out, "manifest.json"), "w"))
+    with open(os.path.join(out, "results.jsonl"), "w") as f:
+        f.write(json.dumps({"adapter": "recency", "question_id": "q1", "qtype": q.qtype, "k": 2, "hits": ["s_late#0"],
+                            "candidates": [], "gold_level": "session", "any_hit_at_k": True}) + "\n")
+    answer.load_questions = lambda *a, **k: {q.id: (q, {it.id: it for it in q.items}, q.items)}
+    return out
+
+
+def _run_answer(stub, run_dir, *flags, key="sk-test"):
+    """answer.main against the stub; (exit code, rows written, stdout)."""
+    import contextlib
+    import io
+    from bench import answer
+    env = {"BENCH_LLM_URL": stub.url + "/v1", "BENCH_LITELLM_KEY": key, "BENCH_ANSWER_MODEL": "ks-cascade-8b"}
+    old = {k: os.environ.get(k) for k in env}
+    for k, v in env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            code = answer.main(["--run", run_dir, *flags])
+    except SystemExit as e:
+        code = e.code
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    path = os.path.join(run_dir, "answers.jsonl")
+    rows = [json.loads(l) for l in open(path, encoding="utf-8")] if os.path.exists(path) else []
+    return code, rows, buf.getvalue()
+
+
+def test_native_ollama_answer_path_keeps_openai_judge():
+    from bench import answer
+    old_lq = answer.load_questions
+    stub = _OllamaStub()
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            code, rows, out = _run_answer(stub, _answer_run_dir(d), "--native-ollama", stub.url)
+            assert code == 0 and len(rows) == 1, out
+            row = rows[0]
+            paths = [p for p, _ in stub.requests]
+            assert paths == ["/api/tokenize", "/api/chat", "/v1/chat/completions"], paths   # answer native, judge OpenAI
+            chat_body = stub.requests[1][1]
+            assert chat_body["think"] is False and chat_body["stream"] is False and chat_body["model"] == "ks-cascade-8b"
+            assert chat_body["options"] == {"temperature": 0.0, "num_predict": 600, "seed": 0}
+            assert [m["role"] for m in chat_body["messages"]] == ["system", "user"]
+            assert chat_body["messages"][0]["content"] == answer.ANSWER_SYS          # the prompt shape is untouched
+            n = row["native"]
+            assert n["model"] == "ks-cascade-8b" and n["eval_count"] == 3 and n["prompt_eval_duration"] == 1500
+            assert n["load_duration"] == 20 and n["total_duration"] == 2300 and n["eval_duration"] == 700
+            assert n["think_span"] is False and n["prompt_check"] == "tokenize"
+            assert n["prompt_eval_count"] == n["prompt_estimate"] + 4 and n["prefix_cache_suspected"] is False
+            assert row["tokens"] == {"answer": {"prompt": n["prompt_eval_count"], "completion": 3},
+                                     "judge": {"prompt": 40, "completion": 1}}
+            assert row["answer"] == "a kayak" and row["verdict"] == "CORRECT" and row["correct"] is True
+            assert row["answer_sha256"] == answer.answer_sha256("a kayak") == _sha("a kayak")
+            assert "PROMPT TRUNCATION" not in out and "-> CORRECT | 'a kayak'" in out
+    finally:
+        stub.close()
+        answer.load_questions = old_lq
+
+
+def test_native_no_judge_quiet_ids_seal_the_row():
+    from bench import answer
+    old_lq = answer.load_questions
+    stub = _OllamaStub(content="<think>hmm</think> a kayak")
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            run_dir = _answer_run_dir(d)
+            quiet = os.path.join(d, "quiet.txt")
+            open(quiet, "w").write("q1\nother\n")
+            # no gateway key anywhere: with --native-ollama --no-judge none is needed
+            code, rows, out = _run_answer(stub, run_dir, "--native-ollama", stub.url, "--no-judge", "--quiet-ids", quiet, key=None)
+            assert code == 0 and len(rows) == 1, out
+            row = rows[0]
+            assert not any(p.startswith("/v1") for p, _ in stub.requests), "the judge was called"
+            assert row["verdict"] is None and row["correct"] is None and row["judge_overridden"] is False
+            assert "judge" not in row["tokens"] and row["tokens"]["answer"]["completion"] == 3
+            assert row["native"]["think_span"] is True
+            sha = _sha("<think>hmm</think> a kayak")
+            assert row["answer_sha256"] == sha
+            progress = [l for l in out.splitlines() if l.startswith("[recency")]
+            assert len(progress) == 1 and "q1" in progress[0] and "ks-cascade-8b" in progress[0] and sha in progress[0], out
+            assert "prompt=" in progress[0] and "completion=3" in progress[0]
+            assert "kayak" not in out and "CORRECT" not in out and "wrong" not in out and "ungraded" not in out, out
+            assert "| recency | 1 | nan |" in out, out                               # the summary table survives null verdicts
+            # a second pass over the same run file re-reads the sealed row without a call
+            n_before = len(stub.requests)
+            code2, rows2, _ = _run_answer(stub, run_dir, "--native-ollama", stub.url, "--no-judge", key=None)
+            assert code2 == 0 and len(rows2) == 1 and len(stub.requests) == n_before
+    finally:
+        stub.close()
+        answer.load_questions = old_lq
+
+
+def test_native_prompt_truncation_check_and_heuristic_fallback():
+    from bench import answer
+    old_lq = answer.load_questions
+    # the server evaluated 3 prompt tokens against an estimate in the dozens: the num_ctx cut
+    stub = _OllamaStub(prompt_eval=3)
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            run_dir = _answer_run_dir(d)
+            code, rows, out = _run_answer(stub, run_dir, "--native-ollama", stub.url, "--no-judge", key=None)
+            assert code == 0 and len(rows) == 1
+            assert "PROMPT TRUNCATION SUSPECTED q1 ks-cascade-8b eval=3 est=" in out, out
+            assert rows[0]["native"]["prefix_cache_suspected"] is True
+        with tempfile.TemporaryDirectory() as d:
+            run_dir = _answer_run_dir(d)
+            code, rows, out = _run_answer(stub, run_dir, "--native-ollama", stub.url, "--no-judge", "--strict-prompt-check", key=None)
+            assert code == 3 and rows == [], (code, rows)                           # stopped, nothing written
+            assert "PROMPT TRUNCATION SUSPECTED" in out
+    finally:
+        stub.close()
+    # a server without /api/tokenize: the length heuristic with the looser bound
+    # (the fixture prompt is ~570 chars -> est ~159; a server count of 130 is 0.82x: flagged
+    # as a possible prefix-cache hit, not as truncation)
+    stub = _OllamaStub(tokenize=False, prompt_eval=130)
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            code, rows, out = _run_answer(stub, _answer_run_dir(d), "--native-ollama", stub.url, "--no-judge", "--strict-prompt-check", key=None)
+            assert code == 0 and len(rows) == 1, out
+            n = rows[0]["native"]
+            assert [p for p, _ in stub.requests] == ["/api/tokenize", "/api/chat"]
+            assert n["prompt_check"] == "heuristic" and n["prompt_estimate"] == round(len(stub.requests[0][1]["prompt"]) / 3.6)
+            assert 0.70 * n["prompt_estimate"] <= 130 < 0.95 * n["prompt_estimate"], n
+            assert n["prefix_cache_suspected"] is True and "PROMPT TRUNCATION" not in out
+    finally:
+        stub.close()
+        answer.load_questions = old_lq
+
+
+def test_default_path_rows_carry_answer_sha256_and_no_native():
+    from bench import answer
+    old_lq = answer.load_questions
+    stub = _OllamaStub()
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            # the OpenAI route for both calls, as before; the stub answers CORRECT to both
+            code, rows, out = _run_answer(stub, _answer_run_dir(d))
+            assert code == 0 and len(rows) == 1
+            assert [p for p, _ in stub.requests] == ["/v1/chat/completions", "/v1/chat/completions"]
+            assert "native" not in rows[0] and rows[0]["answer_sha256"] == _sha("CORRECT")
+            assert rows[0]["tokens"] == {"answer": {"prompt": 40, "completion": 1}, "judge": {"prompt": 40, "completion": 1}}
+            assert rows[0]["verdict"] == "CORRECT" and rows[0]["correct"] is True
+    finally:
+        stub.close()
+        answer.load_questions = old_lq

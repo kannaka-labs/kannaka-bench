@@ -15,11 +15,21 @@ unset it is read from ~/.kannaka-bench-key.env, or BENCH_KEY_FILE), BENCH_ANSWER
 tokens) and prints accuracy per adapter and per question type. Re-runs skip
 rows already judged. Every call's token counts are recorded — cost is a
 column, not a footnote.
+
+ks-cascade additions (default behaviour unchanged when the flags are absent):
+  --native-ollama URL     answer generation through ollama's native /api/chat
+                          (server-reported durations and token counts, think off)
+  --strict-prompt-check   stop (exit 3) when prompt_eval_count says the prompt was cut
+  --no-judge              sealed generation: no judge call, verdict/correct null
+  --quiet-ids FILE        progress lines for these ids show hashes, never text
+Every row carries answer_sha256 (sha256 of the answer text, utf-8).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -241,6 +251,82 @@ def chat(url: str, key: str, model: str, system: str, user: str, max_tokens: int
     raise last or LlmError("no response")
 
 
+# The 14B on six CPU threads takes 250-450 s per answer (ks-cascade prior); the
+# OpenAI route's 180 s would cut every one of them off.
+NATIVE_TIMEOUT = int(os.environ.get("BENCH_NATIVE_TIMEOUT", "3600"))
+# Characters per token for the fallback estimate when /api/tokenize is missing.
+HEURISTIC_CHARS_PER_TOKEN = 3.6
+# The server counts fewer prompt tokens than the prompt has when its prefix
+# cache is warm, so "suspected" is a flag, not a verdict; the tokenised bound is
+# tighter than the heuristic one because the estimate is exact.
+PREFIX_CACHE_RATIO = 0.95
+TRUNCATION_RATIO = {"tokenize": 0.90, "heuristic": 0.70}
+NATIVE_FIELDS = ("prompt_eval_count", "eval_count", "prompt_eval_duration", "eval_duration",
+                 "load_duration", "total_duration", "model")
+
+
+def _post_json(url: str, body: dict, timeout: int) -> dict:
+    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def native_chat(url: str, model: str, system: str, user: str, max_tokens: int = 300,
+                temperature: float = 0.0) -> tuple[str, dict, dict]:
+    """ollama's native /api/chat: (answer, tokens, native). `tokens` has the same
+    {prompt, completion} shape as chat() so the existing accounting works;
+    `native` carries the server-reported counts and durations as returned, and
+    think_span (True when the content still holds a <think> span — the ks-cascade
+    pilot asserts it never does)."""
+    body = {"model": model, "stream": False, "think": False,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "options": {"temperature": temperature, "num_predict": max_tokens, "seed": 0}}
+    last = None
+    for attempt in range(4):
+        try:
+            d = _post_json(url.rstrip("/") + "/api/chat", body, NATIVE_TIMEOUT)
+            msg = d.get("message") or {}
+            text = msg.get("content") or ""
+            native = {k: d.get(k) for k in NATIVE_FIELDS}
+            native["think_span"] = "<think>" in text or bool(msg.get("thinking"))
+            return text.strip(), {"prompt": d.get("prompt_eval_count"), "completion": d.get("eval_count")}, native
+        except urllib.error.HTTPError as e:
+            body_text = ""
+            try:
+                body_text = e.read().decode("utf-8", "replace")[:400]
+            except Exception:  # noqa: BLE001
+                pass
+            last = LlmError(f"HTTP {e.code}: {body_text}")
+            if e.code < 500 and e.code != 429:
+                raise last
+        except Exception as e:  # noqa: BLE001
+            last = LlmError(f"{type(e).__name__}: {str(e)[:200]}")
+        time.sleep(2 * (attempt + 1))
+    raise last or LlmError("no response")
+
+
+def native_prompt_estimate(url: str, model: str, text: str) -> tuple[int, str]:
+    """(estimated prompt tokens, how). /api/tokenize when the server has it
+    ("tokenize"), else len/3.6 ("heuristic"). The chat template adds a few
+    tokens on top of system + user, so the estimate is a floor, not a match."""
+    try:
+        d = _post_json(url.rstrip("/") + "/api/tokenize", {"model": model, "prompt": text}, 120)
+        toks = d.get("tokens")
+        if isinstance(toks, list):
+            return len(toks), "tokenize"
+    except urllib.error.HTTPError as e:
+        if e.code not in (404, 405, 501):
+            raise LlmError(f"tokenize HTTP {e.code}")
+    except Exception as e:  # noqa: BLE001
+        raise LlmError(f"tokenize {type(e).__name__}: {str(e)[:200]}")
+    return round(len(text) / HEURISTIC_CHARS_PER_TOKEN), "heuristic"
+
+
+def answer_sha256(answer: str) -> str:
+    return hashlib.sha256((answer or "").encode("utf-8")).hexdigest()
+
+
 def load_questions(dataset: str, limit, manifest=None):
     if dataset.startswith("convomem"):
         from .datasets import convomem
@@ -336,12 +422,34 @@ def main(argv=None):
     ap.add_argument("--route", choices=("question", "qtype"), default="question",
                     help="how to pick the system prompt: from the question text (default, deployable) "
                          "or from the dataset's gold qtype label (pre-v4 behaviour, for comparison)")
+    ap.add_argument("--native-ollama", default="", metavar="URL",
+                    help="send the ANSWER call to ollama's native URL/api/chat (think off, seed 0, temperature 0) "
+                         "and record the server's prompt_eval_count, eval_count and durations in the row's "
+                         "`native` dict; the judge still goes through BENCH_LLM_URL. Before each call the prompt is "
+                         "measured with URL/api/tokenize (len/3.6 if the server lacks it) and a prompt_eval_count "
+                         "far below that estimate is printed as PROMPT TRUNCATION SUSPECTED")
+    ap.add_argument("--strict-prompt-check", action="store_true",
+                    help="with --native-ollama: stop the run (exit 3) on PROMPT TRUNCATION SUSPECTED, i.e. "
+                         "prompt_eval_count below 0.90x the tokenised estimate (0.70x the heuristic one). Off by "
+                         "default because ollama also reports a low prompt_eval_count when its prefix cache is "
+                         "warm; the row records prefix_cache_suspected (below 0.95x) either way")
+    ap.add_argument("--no-judge", action="store_true",
+                    help="generate only: no judge call; rows carry verdict null, correct null and no judge tokens "
+                         "(sealed rows are judged later from answer_sha256)")
+    ap.add_argument("--quiet-ids", default="", metavar="FILE",
+                    help="one question id per line; for those ids the progress line shows only the id, model, "
+                         "answer_sha256 and token counts, never the answer or the verdict")
     a = ap.parse_args(argv)
 
     url = os.environ.get("BENCH_LLM_URL", "http://127.0.0.1:4000/v1")
-    key = gateway_key()
+    native = a.native_ollama.rstrip("/")
+    # The gateway key is only needed when some call takes the OpenAI route.
+    key = gateway_key() if (not native or not a.no_judge) else None
     answer_model = os.environ.get("BENCH_ANSWER_MODEL", "agent-brain")
     judge_model = os.environ.get("BENCH_JUDGE_MODEL", answer_model)
+    quiet = set()
+    if a.quiet_ids:
+        quiet = {l.strip() for l in open(a.quiet_ids, encoding="utf-8") if l.strip()}
 
     manifest = json.load(open(os.path.join(a.run, "manifest.json"), encoding="utf-8"))
     dataset = manifest["dataset"]["dataset"]
@@ -385,12 +493,29 @@ def main(argv=None):
         route = route_question(q.question, r.get("qtype") or "", a.route)
         system = SYS_BY_ROUTE[route]
         t0 = time.perf_counter()
+        nat = None
         try:
-            answer, au = chat(url, key, answer_model, system, user, max_tokens=a.max_answer_tokens)
-            ans_ms = (time.perf_counter() - t0) * 1000
-            verdict, ju = chat(url, key, judge_model, JUDGE_SYS,
-                               f"Question: {q.question}\nReference answer: {q.answer}\nAnswer to grade: {answer}\n\nOne word: CORRECT or INCORRECT.",
-                               max_tokens=5)
+            if native:
+                est, how = native_prompt_estimate(native, answer_model, system + "\n" + user)
+                answer, au, nat = native_chat(native, answer_model, system, user, max_tokens=a.max_answer_tokens)
+                ans_ms = (time.perf_counter() - t0) * 1000
+                pe = nat.get("prompt_eval_count") or 0
+                nat["prompt_estimate"], nat["prompt_check"] = est, how
+                nat["prefix_cache_suspected"] = pe < PREFIX_CACHE_RATIO * est
+                if pe < TRUNCATION_RATIO[how] * est:
+                    print(f"PROMPT TRUNCATION SUSPECTED {r['question_id']} {answer_model} eval={pe} est={est}", flush=True)
+                    if a.strict_prompt_check:
+                        # The row is NOT written: a truncated prompt must not become the canonical answer.
+                        sys.exit(3)
+            else:
+                answer, au = chat(url, key, answer_model, system, user, max_tokens=a.max_answer_tokens)
+                ans_ms = (time.perf_counter() - t0) * 1000
+            if a.no_judge:
+                verdict, ju = None, None
+            else:
+                verdict, ju = chat(url, key, judge_model, JUDGE_SYS,
+                                   f"Question: {q.question}\nReference answer: {q.answer}\nAnswer to grade: {answer}\n\nOne word: CORRECT or INCORRECT.",
+                                   max_tokens=5)
         except LlmError as e:
             # Not graded: recorded as an error row (not counted as wrong), and the
             # run keeps going — but an out-of-credit or auth failure will hit every
@@ -403,34 +528,53 @@ def main(argv=None):
                 break
             continue
         globals()["_consec"] = 0
-        correct, judge_overridden = grade(verdict, answer, q.answer, r["question_id"])
+        if verdict is None:
+            correct, judge_overridden = None, False
+        else:
+            correct, judge_overridden = grade(verdict, answer, q.answer, r["question_id"])
+        sha = answer_sha256(answer)
+        tokens = {"answer": au}
+        if ju is not None:
+            tokens["judge"] = ju
         row = {"adapter": r["adapter"], "question_id": r["question_id"], "qtype": r["qtype"], "mode": mode,
                "n_excerpts": len(ctx_items), "excerpt_cap": EXCERPT_CHAR_CAP, "pair_turns": PAIR_TURNS,
                "per_session": a.per_session, "max_excerpts": a.max_excerpts, "max_answer_tokens": a.max_answer_tokens,
                "route": route, "route_mode": a.route,
                "judge_overridden": judge_overridden,
-               "hit_at_k": r["any_hit_at_k"], "answer": answer, "gold": q.answer, "verdict": verdict, "correct": correct,
+               "hit_at_k": r["any_hit_at_k"], "answer": answer, "answer_sha256": sha, "gold": q.answer,
+               "verdict": verdict, "correct": correct,
                "answer_model": answer_model, "judge_model": judge_model, "answer_ms": round(ans_ms),
-               "tokens": {"answer": au, "judge": ju}}
+               "tokens": tokens}
+        if nat is not None:
+            row["native"] = nat
         results.append(row)
         n_new += 1
         with open(out_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        print(f"[{r['adapter']:14}] {r['question_id'][:12]} {r['qtype'][:20]:20} {mode:8} hit={r['any_hit_at_k']!s:5} "
-              f"-> {'CORRECT' if correct else 'wrong  '} | {answer[:70]!r}", flush=True)
+        if r["question_id"] in quiet:
+            print(f"[{r['adapter']:14}] {r['question_id']} {answer_model} sha256={sha} "
+                  f"tokens prompt={au.get('prompt')} completion={au.get('completion')}", flush=True)
+        else:
+            status = "ungraded" if correct is None else ("CORRECT" if correct else "wrong  ")
+            print(f"[{r['adapter']:14}] {r['question_id'][:12]} {r['qtype'][:20]:20} {mode:8} hit={r['any_hit_at_k']!s:5} "
+                  f"-> {status} | {answer[:70]!r}", flush=True)
 
     print(f"\n{n_new} new rows; {len(results)} total in {out_path}\n")
     by = defaultdict(list)
     for x in results:
         by[x["adapter"]].append(x)
+
+    def acc_of(xs):
+        # --no-judge rows have correct=null and are not graded; nan when nothing is
+        graded = [x for x in xs if x.get("correct") is not None]
+        return sum(x["correct"] for x in graded) / len(graded) if graded else float("nan")
+
     print("| adapter | n | accuracy | acc when hit | acc when miss | prompt tok/q | answer p50 ms |")
     print("|---|---|---|---|---|---|---|")
-    for name, xs in sorted(by.items(), key=lambda kv: -sum(x["correct"] for x in kv[1]) / max(1, len(kv[1]))):
-        acc = sum(x["correct"] for x in xs) / len(xs)
-        hit = [x for x in xs if x["hit_at_k"]]
-        miss = [x for x in xs if not x["hit_at_k"]]
-        acc_h = sum(x["correct"] for x in hit) / len(hit) if hit else float("nan")
-        acc_m = sum(x["correct"] for x in miss) / len(miss) if miss else float("nan")
+    for name, xs in sorted(by.items(), key=lambda kv: -(0.0 if math.isnan(acc_of(kv[1])) else acc_of(kv[1]))):
+        acc = acc_of(xs)
+        acc_h = acc_of([x for x in xs if x["hit_at_k"]])
+        acc_m = acc_of([x for x in xs if not x["hit_at_k"]])
         ptok = sum((x["tokens"]["answer"] or {}).get("prompt") or 0 for x in xs) / len(xs)
         lat = sorted(x["answer_ms"] for x in xs)[len(xs) // 2]
         print(f"| {name} | {len(xs)} | {acc:.3f} | {acc_h:.3f} | {acc_m:.3f} | {ptok:.0f} | {lat} |")
@@ -443,7 +587,7 @@ def main(argv=None):
             cells = []
             for name in by:
                 xs = [x for x in by[name] if x["qtype"] == t]
-                cells.append(f"{sum(x['correct'] for x in xs) / len(xs):.2f} (n={len(xs)})" if xs else "—")
+                cells.append(f"{acc_of(xs):.2f} (n={len(xs)})" if xs else "—")
             print(f"| {t} | " + " | ".join(cells) + " |")
     return 0
 
